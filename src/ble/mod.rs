@@ -1,6 +1,6 @@
 use anyhow::{Context, Error, Result};
+use futures::stream::BoxStream;
 use std::convert::TryInto;
-use tokio::sync::broadcast;
 
 #[macro_export]
 macro_rules! uuid {
@@ -14,7 +14,7 @@ macro_rules! uuid {
 pub struct Uuid(pub [u8; 16]);
 
 /// Callback to receive values from peripherals.
-pub type Notifications = broadcast::Receiver<(Uuid, Vec<u8>)>;
+pub type Notifications = BoxStream<'static, (Uuid, Vec<u8>)>;
 
 /// The interface for platform-specific BLE searcher.
 #[async_trait::async_trait]

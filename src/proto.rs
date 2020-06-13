@@ -101,7 +101,7 @@ pub enum Ori {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, new)]
 pub struct MotionDetect {
-    pub slope: bool,
+    pub even: bool,
     pub collision: bool,
     pub tap: bool,
     pub position: Ori,
@@ -345,23 +345,27 @@ msg!(
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, new)]
 pub struct ProtocolVersion {
+    #[new(default)]
     pub reserve: u8,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, new)]
 pub struct HorizontalDetection {
+    #[new(default)]
     pub reserved: u8,
     pub threshold: u8,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, new)]
 pub struct CollisionDetection {
+    #[new(default)]
     pub reserved: u8,
     pub threshold: u8,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, new)]
 pub struct DoubleTapDetection {
+    #[new(default)]
     pub reserved: u8,
     pub interval: u8,
 }
@@ -369,7 +373,7 @@ pub struct DoubleTapDetection {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, new)]
 pub struct ProtocolVersionRes {
     pub reserved: u8,
-    pub version: [u8; 6],
+    pub version: [u8; 5],
 }
 
 msg!(
@@ -378,7 +382,7 @@ msg!(
         HorizontalDetection(HorizontalDetection) = 0x02,
         CollisionDetection(CollisionDetection) = 0x03,
         DoubleTapDetection(DoubleTapDetection) = 0x04,
-        ProtocolVersionRes(ProtocolVersionRes) = 0x83,
+        ProtocolVersionRes(ProtocolVersionRes) = 0x81,
     }
 );
 

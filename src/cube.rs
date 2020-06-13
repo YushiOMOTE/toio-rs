@@ -1,11 +1,19 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use derive_new::new;
+use futures::{
+    future::{abortable, AbortHandle},
+    prelude::*,
+    stream::{self, BoxStream},
+};
+use log::*;
 use serde::{Deserialize, Serialize};
+use std::convert::TryInto;
+use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::broadcast;
+use tokio::sync::Mutex;
 
 use crate::{
-    ble::{self, PeripheralOps},
+    ble::{self, PeripheralOps, Uuid},
     proto::*,
     Searcher,
 };
@@ -59,15 +67,30 @@ pub enum Event {
     Button(bool),
 }
 
-pub struct EventStream(broadcast::Receiver<Event>);
+pub type EventStream = BoxStream<'static, Event>;
+
+#[derive(Default, Debug)]
+struct Status {
+    protocol_version: Option<String>,
+    battery: Option<usize>,
+    collision: Option<bool>,
+    slope: Option<bool>,
+    button: Option<bool>,
+}
 
 pub struct Cube {
     adaptor: ble::Adaptor,
+    status: Arc<Mutex<Status>>,
+    handle: Option<AbortHandle>,
 }
 
 impl Cube {
     pub(crate) fn new(adaptor: ble::Adaptor) -> Self {
-        Self { adaptor }
+        Self {
+            adaptor,
+            status: Arc::new(Mutex::new(Status::default())),
+            handle: None,
+        }
     }
 
     /// Get the searcher.
@@ -77,27 +100,52 @@ impl Cube {
 
     /// Get the BLE protocol version.
     pub async fn protocol_version(&mut self) -> Result<String> {
-        unimplemented!()
+        self.status
+            .lock()
+            .await
+            .protocol_version
+            .clone()
+            .ok_or_else(|| anyhow!("Couldn't read protocol version"))
     }
 
     /// Get the battery status.
     pub async fn battery(&mut self) -> Result<usize> {
-        unimplemented!()
+        self.status
+            .lock()
+            .await
+            .battery
+            .clone()
+            .ok_or_else(|| anyhow!("Couldn't read battery"))
     }
 
     /// Get the collision status.
     pub async fn collision(&mut self) -> Result<bool> {
-        unimplemented!()
+        self.status
+            .lock()
+            .await
+            .collision
+            .clone()
+            .ok_or_else(|| anyhow!("Couldn't read collision"))
     }
 
     /// Get the slope status.
     pub async fn slope(&mut self) -> Result<bool> {
-        unimplemented!()
+        self.status
+            .lock()
+            .await
+            .slope
+            .clone()
+            .ok_or_else(|| anyhow!("Couldn't read slope"))
     }
 
     /// Get the button status.
     pub async fn button(&mut self) -> Result<bool> {
-        unimplemented!()
+        self.status
+            .lock()
+            .await
+            .button
+            .clone()
+            .ok_or_else(|| anyhow!("Couldn't read button"))
     }
 
     /// Move the cube.
@@ -175,11 +223,92 @@ impl Cube {
 
     /// Connect the cube.
     pub async fn connect(&mut self) -> Result<()> {
+        let status = self.status.clone();
+        let mut rx = self.adaptor.subscribe()?;
+        let (forward, handle) = abortable(async move {
+            while let Some(value) = rx.next().await {
+                match unpack(value) {
+                    Ok(msg) => update(&status, msg).await,
+                    Err(e) => {
+                        warn!("Error on updating status: {}", e);
+                    }
+                }
+            }
+        });
+        tokio::spawn(forward);
+        self.handle = Some(handle);
+
         self.adaptor.connect().await?;
+
         Ok(())
     }
 
-    pub async fn events(&self) -> Result<EventStream> {
-        unimplemented!()
+    pub async fn events(&mut self) -> Result<EventStream> {
+        let rx = self.adaptor.subscribe()?;
+
+        Ok(rx
+            .filter_map(move |event| async move {
+                match unpack(event) {
+                    Ok(msg) => convert(msg).map(|v| stream::iter(v)),
+                    Err(e) => {
+                        warn!("Error on handling events: {}", e);
+                        None
+                    }
+                }
+            })
+            .flatten()
+            .boxed())
+    }
+}
+
+impl Drop for Cube {
+    fn drop(&mut self) {
+        if let Some(handle) = self.handle.as_ref() {
+            handle.abort();
+        }
+    }
+}
+
+fn unpack((uuid, value): (Uuid, Vec<u8>)) -> Result<Message> {
+    Ok((uuid.clone(), (&value as &[u8]))
+        .try_into()
+        .context(format!("Couldn't parse value: {:?}", value))?)
+}
+
+async fn update(status: &Arc<Mutex<Status>>, msg: Message) {
+    match msg {
+        Message::Motion(Motion::Detect(m)) => {
+            debug!("Updated motion: {:?}", m);
+            let mut status = status.lock().await;
+            status.slope = Some(!m.even);
+            status.collision = Some(m.collision);
+        }
+        Message::Button(Button::Func(b)) => {
+            debug!("Updated button: {:?}", b);
+            let mut status = status.lock().await;
+            status.button = Some(b == ButtonState::Pressed)
+        }
+        Message::Battery(v) => {
+            debug!("Updated battery: {:?}", v);
+            let mut status = status.lock().await;
+            status.battery = Some(v as usize);
+        }
+        Message::Config(Config::ProtocolVersionRes(v)) => {
+            debug!("Updated protocol version: {:?}", v);
+            let mut status = status.lock().await;
+            status.protocol_version = Some(String::from_utf8_lossy(&v.version).to_string());
+        }
+        _ => {}
+    }
+}
+
+fn convert(msg: Message) -> Option<Vec<Event>> {
+    match msg {
+        Message::Motion(Motion::Detect(m)) => {
+            Some(vec![Event::Slope(!m.even), Event::Collision(m.collision)])
+        }
+        Message::Button(Button::Func(b)) => Some(vec![Event::Button(b == ButtonState::Pressed)]),
+        Message::Battery(v) => Some(vec![Event::Battery(v as usize)]),
+        _ => None,
     }
 }

@@ -1,6 +1,7 @@
 use crate::ble::{Notifications, PeripheralOps, SearchOps, Uuid as ClientUuid};
 
 use anyhow::{anyhow, bail, Context, Error, Result};
+use futures::prelude::*;
 use log::*;
 use std::collections::HashMap;
 use std::sync::{
@@ -130,6 +131,7 @@ impl PeripheralOps for Adaptor {
         } else {
             WriteKind::WithoutResponse
         };
+        debug!("Writing value to characteristic {}: {:?}", c.id(), value);
         self.peripheral.write_characteristic(c, value, w);
 
         if with_resp {
@@ -169,7 +171,20 @@ impl PeripheralOps for Adaptor {
     }
 
     fn subscribe(&mut self) -> Result<Notifications> {
-        unimplemented!()
+        let rx = self.backend.subscribe();
+        let id = self.peripheral.id();
+
+        Ok(rx
+            .into_stream()
+            .filter_map(move |event| async move {
+                match event {
+                    Ok(Event::Value(p, c, value)) if p.id() == id => {
+                        Some((ClientUuid(c.id().bytes()), value))
+                    }
+                    _ => None,
+                }
+            })
+            .boxed())
     }
 }
 
@@ -342,17 +357,21 @@ impl ConnectionManager {
                 characteristics,
             } => match characteristics {
                 Ok(characteristics) => {
-                    for c in characteristics
-                        .iter()
-                        .filter(|c| c.properties().can_notify())
-                    {
-                        debug!(
-                            "Subscribing to characteristic {} of {}",
-                            c.id(),
-                            peripheral.id()
-                        );
-                        peripheral.subscribe(&c);
+                    for c in characteristics.iter() {
+                        if c.properties().can_read() {
+                            debug!("Read characteristic {} of {}", c.id(), peripheral.id());
+                            peripheral.read_characteristic(&c);
+                        }
+                        if c.properties().can_notify() {
+                            debug!(
+                                "Subscribing to characteristic {} of {}",
+                                c.id(),
+                                peripheral.id()
+                            );
+                            peripheral.subscribe(&c);
+                        }
                     }
+
                     return Ok(Some(Event::Connected(peripheral, characteristics)));
                 }
                 Err(err) => error!(
@@ -369,8 +388,8 @@ impl ConnectionManager {
                 if let Ok(value) = value {
                     debug!(
                         "Received value of characteristic {} of peripheral {}: value={:?}",
-                        peripheral.id(),
                         characteristic.id(),
+                        peripheral.id(),
                         value
                     );
                     return Ok(Some(Event::Value(peripheral, characteristic, value)));
