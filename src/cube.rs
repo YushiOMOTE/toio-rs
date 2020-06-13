@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use derive_new::new;
 use serde::{Deserialize, Serialize};
-use std::{convert::TryInto, time::Duration};
+use std::time::Duration;
 use tokio::sync::broadcast;
 
 use crate::{
@@ -142,9 +142,10 @@ impl Cube {
         Ok(())
     }
 
-    /// Stop the cube movement.
+    /// Stop the cube.
     pub async fn stop(&mut self) -> Result<()> {
-        unimplemented!()
+        self.go(0, 0, None).await?;
+        Ok(())
     }
 
     /// Play sound.
