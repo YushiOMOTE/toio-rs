@@ -47,6 +47,7 @@ impl Adaptor {
 
         let id = peripheral.id();
         let conn = connected.clone();
+        let cen = central.clone();
         tokio::spawn(async move {
             loop {
                 if let Ok(event) = rx.recv().await {
@@ -56,6 +57,7 @@ impl Adaptor {
                         }
                         Event::Disconnected(peripheral) if peripheral.id() == id => {
                             conn.store(false, Ordering::SeqCst);
+                            cen.connect(&peripheral);
                         }
                         _ => {}
                     }
