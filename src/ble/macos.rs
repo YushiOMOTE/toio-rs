@@ -115,10 +115,6 @@ impl PeripheralOps for Adaptor {
     }
 
     async fn write(&mut self, uuid: &ClientUuid, value: &[u8], with_resp: bool) -> Result<()> {
-        if !self.connected.load(Ordering::Relaxed) {
-            bail!("Peripheral {} is not connected", self.peripheral.id());
-        }
-
         let mut rx = self.backend.subscribe();
 
         let uuid = Uuid::from_bytes(uuid.0);
