@@ -16,7 +16,7 @@ impl Searcher {
     }
 
     /// Search for all cubes.
-    pub async fn search(&mut self) -> Result<Vec<Cube>> {
+    pub async fn all(&mut self) -> Result<Vec<Cube>> {
         Ok(self
             .do_search()
             .await?
