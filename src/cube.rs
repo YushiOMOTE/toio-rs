@@ -1,11 +1,12 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use derive_new::new;
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
+use std::{convert::TryInto, time::Duration};
 use tokio::sync::broadcast;
 
 use crate::{
     ble::{self, PeripheralOps},
+    proto::*,
     Searcher,
 };
 
@@ -100,8 +101,47 @@ impl Cube {
     }
 
     /// Move the cube.
-    pub async fn go(&mut self, _left: isize, _right: isize, _duration: Duration) -> Result<Cube> {
-        unimplemented!()
+    pub async fn go(
+        &mut self,
+        left: isize,
+        right: isize,
+        duration: Option<Duration>,
+    ) -> Result<()> {
+        if left < -100 || left > 100 || right < -100 || right > 100 {
+            return Err(anyhow!("Motor speed must be between -100 and 100"));
+        }
+        let (left_dir, left) = if left > 0 {
+            (MotorDir::Forward, left as u8)
+        } else {
+            (MotorDir::Back, (left * -1) as u8)
+        };
+        let (right_dir, right) = if right > 0 {
+            (MotorDir::Forward, right as u8)
+        } else {
+            (MotorDir::Back, (right * -1) as u8)
+        };
+
+        let buf: Vec<u8> = if let Some(d) = duration {
+            let d = d.as_millis();
+            if d > 255 {
+                return Err(anyhow!("Duration must be less than 256 milliseconds"));
+            }
+            let d = d.try_into()?;
+
+            Motor::Timed(MotorTimed::new(
+                0x01, left_dir, left, 0x02, right_dir, right, d,
+            ))
+            .try_into()?
+        } else {
+            Motor::Simple(MotorSimple::new(
+                0x01, left_dir, left, 0x02, right_dir, right,
+            ))
+            .try_into()?
+        };
+
+        self.adaptor.write(&UUID_MOTOR, &buf, false).await?;
+
+        Ok(())
     }
 
     /// Stop the cube movement.
