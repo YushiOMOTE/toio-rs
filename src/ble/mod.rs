@@ -50,6 +50,9 @@ pub trait PeripheralOps {
     /// Connect to the peripheral.
     async fn connect(&mut self) -> Result<()>;
 
+    /// Send a read request.
+    async fn read(&mut self, uuid: &Uuid) -> Result<()>;
+
     /// Write with/without response.
     async fn write(&mut self, uuid: &Uuid, value: &[u8], with_resp: bool) -> Result<()>;
 
@@ -101,6 +104,11 @@ where
     /// Connect to the peripheral.
     async fn connect(&mut self) -> Result<()> {
         (**self).connect().await
+    }
+
+    /// Send a read request.
+    async fn read(&mut self, uuid: &Uuid) -> Result<()> {
+        (**self).read(uuid).await
     }
 
     /// Write with/without response.

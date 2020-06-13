@@ -72,6 +72,14 @@ impl Adaptor {
             backend,
         }
     }
+
+    fn ch(&self, uuid: &Uuid) -> Result<&Characteristic> {
+        let ch = self
+            .characteristics
+            .get(uuid)
+            .ok_or_else(|| anyhow!("No such characteristic {}", uuid))?;
+        Ok(ch)
+    }
 }
 
 #[async_trait::async_trait]
@@ -114,14 +122,18 @@ impl PeripheralOps for Adaptor {
         Ok(())
     }
 
+    async fn read(&mut self, uuid: &ble::Uuid) -> Result<()> {
+        let uuid = Uuid::from_bytes(uuid.0);
+        let c = self.ch(&uuid)?;
+        self.peripheral.read_characteristic(c);
+        Ok(())
+    }
+
     async fn write(&mut self, uuid: &ble::Uuid, value: &[u8], with_resp: bool) -> Result<()> {
         let mut rx = self.backend.subscribe();
 
         let uuid = Uuid::from_bytes(uuid.0);
-        let c = self
-            .characteristics
-            .get(&uuid)
-            .ok_or_else(|| anyhow!("No such characteristic {}", uuid))?;
+        let c = self.ch(&uuid)?;
         let w = if with_resp {
             WriteKind::WithResponse
         } else {

@@ -417,7 +417,7 @@ impl TryFrom<(Uuid, &[u8])> for Message {
             UUID_LIGHT => Message::Light(buf.try_into()?),
             UUID_SOUND => Message::Sound(buf.try_into()?),
             UUID_CONFIG => Message::Config(buf.try_into()?),
-            uuid => bail!("Unknown uuid: {:?}", uuid),
+            uuid => bail!("Unknown uuid: {}", uuid),
         };
         Ok(msg)
     }
