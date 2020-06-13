@@ -95,14 +95,12 @@ impl PeripheralOps for Adaptor {
                 match event {
                     Event::Connected(peripheral, characteristics) => {
                         if peripheral.id() == id {
-                            info!("Connected {}", id);
+                            debug!("Connected to peripheral {}", peripheral.id());
                             self.characteristics = characteristics
                                 .into_iter()
                                 .map(|c| (c.id().clone(), c))
                                 .collect();
                             return Ok::<_, Error>(());
-                        } else {
-                            info!("Not me: {} != {}", peripheral.id(), id);
                         }
                     }
                     _ => {}
@@ -213,15 +211,13 @@ impl SearchOps for Searcher {
                 match event {
                     Event::Discovered(peripheral, ad, rssi) => {
                         if ad.service_uuids().contains(&uuid) {
-                            info!("Discovered target peripheral: {:?}", peripheral);
+                            debug!("Discovered peripheral: {:?}", peripheral);
                             found.push(Adaptor::new(
                                 central.clone(),
                                 peripheral,
                                 rssi,
                                 self.backend.clone(),
                             ));
-                        } else {
-                            info!("Not the target: {:?} vs {:?}", peripheral.id(), uuid);
                         }
                     }
                     _ => {}
@@ -257,7 +253,7 @@ impl ConnectionManager {
     }
 
     fn handle_event(&self, event: CentralEvent) -> Result<Option<Event>> {
-        trace!("Event: {:#?}", event);
+        trace!("Event: {:?}", event);
 
         match event {
             CentralEvent::ManagerStateChanged { new_state } => match new_state {
@@ -271,7 +267,7 @@ impl ConnectionManager {
                     warn!("Bluetooth is disabled");
                 }
                 ManagerState::PoweredOn => {
-                    info!("Bluetooth is enabled.");
+                    debug!("Bluetooth is enabled.");
                 }
                 _ => {}
             },
@@ -280,10 +276,9 @@ impl ConnectionManager {
                 advertisement_data,
                 rssi,
             } => {
-                info!(
-                    "Discovered peripheral {} {} dB ({:?})",
+                debug!(
+                    "Discovered peripheral {} ({:?})",
                     peripheral.id(),
-                    rssi,
                     advertisement_data.local_name()
                 );
                 if advertisement_data.is_connectable() != Some(false) {
@@ -309,7 +304,7 @@ impl ConnectionManager {
             }
             CentralEvent::PeripheralConnectFailed { peripheral, error } => {
                 warn!(
-                    "Failed to connect to peripheral {}: {}",
+                    "Couldn't connect to peripheral {}: {}",
                     peripheral.id(),
                     error
                         .map(|e| e.to_string())
@@ -333,12 +328,12 @@ impl ConnectionManager {
                 result,
             } => {
                 if result.is_err() {
-                    error!(
+                    warn!(
                         "Couldn't subscribe to characteristic of {}",
                         peripheral.id()
                     );
                 } else {
-                    info!("Subscribed to {}", peripheral.id());
+                    debug!("Subscribe to characteristic of {}", peripheral.id());
                 }
             }
             CentralEvent::CharacteristicsDiscovered {
@@ -351,7 +346,7 @@ impl ConnectionManager {
                         .iter()
                         .filter(|c| c.properties().can_notify())
                     {
-                        info!(
+                        debug!(
                             "Subscribing to characteristic {} of {}",
                             c.id(),
                             peripheral.id()
@@ -372,7 +367,12 @@ impl ConnectionManager {
                 value,
             } => {
                 if let Ok(value) = value {
-                    debug!("Received value: {:?}, value: {:?}", characteristic, value);
+                    debug!(
+                        "Received value of characteristic {} of peripheral {}: value={:?}",
+                        peripheral.id(),
+                        characteristic.id(),
+                        value
+                    );
                     return Ok(Some(Event::Value(peripheral, characteristic, value)));
                 }
             }
