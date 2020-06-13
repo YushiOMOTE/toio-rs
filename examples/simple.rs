@@ -4,6 +4,8 @@ use tokio::time::delay_for;
 
 #[tokio::main]
 async fn main() {
+    env_logger::init();
+
     // Search for the nearest cube
     let mut cube = Cube::search().nearest().await.unwrap();
 

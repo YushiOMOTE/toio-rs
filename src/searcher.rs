@@ -1,5 +1,5 @@
 use crate::{
-    ble::{self, PeripheralOps, SearchOps},
+    ble::{self, PeripheralOps},
     proto, Cube,
 };
 use anyhow::{anyhow, Context, Result};
@@ -11,7 +11,7 @@ pub struct Searcher {
 impl Searcher {
     pub fn new() -> Self {
         Self {
-            searcher: ble::Searcher::new(),
+            searcher: ble::searcher(),
         }
     }
 
@@ -35,7 +35,7 @@ impl Searcher {
             .ok_or_else(|| anyhow!("No cube found"))
     }
 
-    async fn do_search(&mut self) -> Result<Vec<ble::Adaptor>> {
+    async fn do_search(&mut self) -> Result<Vec<ble::Peripheral>> {
         Ok(self
             .searcher
             .search(&proto::UUID_SERVICE)

@@ -1,4 +1,4 @@
-use crate::ble::{Notifications, PeripheralOps, SearchOps, Uuid as ClientUuid};
+use crate::ble::{self, PeripheralOps, SearchOps, ValueStream};
 
 use anyhow::{anyhow, bail, Context, Error, Result};
 use futures::prelude::*;
@@ -114,7 +114,7 @@ impl PeripheralOps for Adaptor {
         Ok(())
     }
 
-    async fn write(&mut self, uuid: &ClientUuid, value: &[u8], with_resp: bool) -> Result<()> {
+    async fn write(&mut self, uuid: &ble::Uuid, value: &[u8], with_resp: bool) -> Result<()> {
         let mut rx = self.backend.subscribe();
 
         let uuid = Uuid::from_bytes(uuid.0);
@@ -166,7 +166,7 @@ impl PeripheralOps for Adaptor {
         Ok(())
     }
 
-    fn subscribe(&mut self) -> Result<Notifications> {
+    fn subscribe(&mut self) -> Result<ValueStream> {
         let rx = self.backend.subscribe();
         let id = self.peripheral.id();
 
@@ -175,13 +175,17 @@ impl PeripheralOps for Adaptor {
             .filter_map(move |event| async move {
                 match event {
                     Ok(Event::Value(p, c, value)) if p.id() == id => {
-                        Some((ClientUuid(c.id().bytes()), value))
+                        Some((ble::Uuid(c.id().bytes()), value))
                     }
                     _ => None,
                 }
             })
             .boxed())
     }
+}
+
+pub fn searcher() -> ble::Searcher {
+    Box::new(Searcher::new())
 }
 
 pub struct Searcher {
@@ -198,9 +202,7 @@ impl Searcher {
 
 #[async_trait::async_trait]
 impl SearchOps for Searcher {
-    type Adaptor = Adaptor;
-
-    async fn search(&mut self, uuid: &ClientUuid) -> Result<Vec<Self::Adaptor>> {
+    async fn search(&mut self, uuid: &ble::Uuid) -> Result<Vec<ble::Peripheral>> {
         let uuid = Uuid::from_bytes(uuid.0);
 
         let mut rx = self.backend.subscribe();
@@ -210,7 +212,7 @@ impl SearchOps for Searcher {
             .get_peripherals_with_services(&[uuid.clone()]);
         self.backend.central().scan();
 
-        let mut found = vec![];
+        let mut found = Vec::new();
         let central = self.backend.central().clone();
         let discover = async {
             loop {
@@ -223,12 +225,12 @@ impl SearchOps for Searcher {
                     Event::Discovered(peripheral, ad, rssi) => {
                         if ad.service_uuids().contains(&uuid) {
                             debug!("Discovered peripheral: {:?}", peripheral);
-                            found.push(Adaptor::new(
+                            found.push(Box::new(Adaptor::new(
                                 central.clone(),
                                 peripheral,
                                 rssi,
                                 self.backend.clone(),
-                            ));
+                            )) as ble::Peripheral);
                         }
                     }
                     _ => {}

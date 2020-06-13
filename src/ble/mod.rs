@@ -1,6 +1,8 @@
 use anyhow::{Context, Error, Result};
-use futures::stream::BoxStream;
-use std::convert::TryInto;
+use derive_new::new;
+use futures::{prelude::*, stream::BoxStream};
+use std::convert::{TryFrom, TryInto};
+use std::fmt::{self, Display};
 
 #[macro_export]
 macro_rules! uuid {
@@ -10,19 +12,33 @@ macro_rules! uuid {
 }
 
 /// Uuid for services or characteristics.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, new)]
 pub struct Uuid(pub [u8; 16]);
 
+impl Display for Uuid {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let b = self.0;
+        write!(f, "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}", b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15])
+    }
+}
+
 /// Callback to receive values from peripherals.
-pub type Notifications = BoxStream<'static, (Uuid, Vec<u8>)>;
+pub type ValueStream = BoxStream<'static, (Uuid, Vec<u8>)>;
+
+/// Callback to receive values from peripherals.
+pub type MessageStream<T> = BoxStream<'static, Result<T>>;
+
+/// Peripheral
+pub type Peripheral = Box<dyn PeripheralOps + Send>;
+
+/// Searcher
+pub type Searcher = Box<dyn SearchOps + Send>;
 
 /// The interface for platform-specific BLE searcher.
 #[async_trait::async_trait]
 pub trait SearchOps {
-    type Adaptor;
-
     /// Search for peripherals.
-    async fn search(&mut self, uuid: &Uuid) -> Result<Vec<Self::Adaptor>>;
+    async fn search(&mut self, uuid: &Uuid) -> Result<Vec<Peripheral>>;
 }
 
 /// The interface for platform-specific BLE peripheral.
@@ -37,31 +53,80 @@ pub trait PeripheralOps {
     /// Write with/without response.
     async fn write(&mut self, uuid: &Uuid, value: &[u8], with_resp: bool) -> Result<()>;
 
+    /// Subscribe to the peripheral.
+    fn subscribe(&mut self) -> Result<ValueStream>;
+}
+
+#[async_trait::async_trait]
+pub trait PeripheralOpsExt: PeripheralOps {
     /// Write protocol message.
     async fn write_msg<T>(&mut self, uuid: &Uuid, value: T, with_resp: bool) -> Result<()>
     where
         T: TryInto<Vec<u8>, Error = Error> + Send,
     {
-        let value: Vec<u8> = value.try_into().context("Couldn't pack message")?;
+        let value: Vec<u8> = value
+            .try_into()
+            .context(format!("Couldn't pack message to characteristic {}", uuid))?;
         self.write(uuid, &value, with_resp).await?;
         Ok(())
     }
 
-    /// Subscribe to the peripheral.
-    fn subscribe(&mut self) -> Result<Notifications>;
+    /// Subscribe to the peripheral parsing bytes to protocol messge.
+    fn subscribe_msg<T>(&mut self) -> Result<MessageStream<T>>
+    where
+        T: TryFrom<(Uuid, Vec<u8>), Error = Error> + Send,
+    {
+        Ok(self
+            .subscribe()?
+            .map(|(uuid, value)| {
+                (uuid.clone(), value).try_into().context(format!(
+                    "Couldn't unpack message from characteristic {}",
+                    uuid
+                ))
+            })
+            .boxed())
+    }
 }
+
+#[async_trait::async_trait]
+impl<T> PeripheralOps for Box<T>
+where
+    T: PeripheralOps + ?Sized + Send,
+{
+    // Rssi
+    fn rssi(&self) -> i32 {
+        (**self).rssi()
+    }
+
+    /// Connect to the peripheral.
+    async fn connect(&mut self) -> Result<()> {
+        (**self).connect().await
+    }
+
+    /// Write with/without response.
+    async fn write(&mut self, uuid: &Uuid, value: &[u8], with_resp: bool) -> Result<()> {
+        (**self).write(uuid, value, with_resp).await
+    }
+
+    /// Subscribe to the peripheral.
+    fn subscribe(&mut self) -> Result<ValueStream> {
+        (**self).subscribe()
+    }
+}
+
+impl<T> PeripheralOpsExt for T where T: PeripheralOps {}
 
 #[cfg(target_os = "macos")]
 mod macos;
 #[cfg(target_os = "macos")]
-pub use macos::{Adaptor, Searcher};
+pub use macos::searcher;
 
 #[cfg(target_os = "windows")]
 mod windows;
 #[cfg(target_os = "windows")]
-pub use windows::{Adaptor, Searcher};
+pub use windows::searcher;
 
 #[cfg(target_os = "linux")]
 mod linux;
 #[cfg(target_os = "linux")]
-pub use linux::{Adaptor, Searcher};
+pub use linux::searcher;

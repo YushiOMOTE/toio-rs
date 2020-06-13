@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use derive_new::new;
 use futures::{
     future::{abortable, AbortHandle},
@@ -7,13 +7,12 @@ use futures::{
 };
 use log::*;
 use serde::{Deserialize, Serialize};
-use std::convert::TryInto;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
 
 use crate::{
-    ble::{self, PeripheralOps, Uuid},
+    ble::{self, PeripheralOps, PeripheralOpsExt},
     proto::*,
     Searcher,
 };
@@ -79,15 +78,15 @@ struct Status {
 }
 
 pub struct Cube {
-    adaptor: ble::Adaptor,
+    dev: ble::Peripheral,
     status: Arc<Mutex<Status>>,
     handle: Option<AbortHandle>,
 }
 
 impl Cube {
-    pub(crate) fn new(adaptor: ble::Adaptor) -> Self {
+    pub(crate) fn new(dev: ble::Peripheral) -> Self {
         Self {
-            adaptor,
+            dev,
             status: Arc::new(Mutex::new(Status::default())),
             handle: None,
         }
@@ -185,7 +184,7 @@ impl Cube {
             ))
         };
 
-        self.adaptor.write_msg(&UUID_MOTOR, motor, false).await?;
+        self.dev.write_msg(&UUID_MOTOR, motor, false).await?;
 
         Ok(())
     }
@@ -224,10 +223,10 @@ impl Cube {
     /// Connect the cube.
     pub async fn connect(&mut self) -> Result<()> {
         let status = self.status.clone();
-        let mut rx = self.adaptor.subscribe()?;
+        let mut rx = self.dev.subscribe_msg()?;
         let (forward, handle) = abortable(async move {
-            while let Some(value) = rx.next().await {
-                match unpack(value) {
+            while let Some(msg) = rx.next().await {
+                match msg {
                     Ok(msg) => update(&status, msg).await,
                     Err(e) => {
                         warn!("Error on updating status: {}", e);
@@ -238,17 +237,17 @@ impl Cube {
         tokio::spawn(forward);
         self.handle = Some(handle);
 
-        self.adaptor.connect().await?;
+        self.dev.connect().await?;
 
         Ok(())
     }
 
     pub async fn events(&mut self) -> Result<EventStream> {
-        let rx = self.adaptor.subscribe()?;
+        let rx = self.dev.subscribe_msg()?;
 
         Ok(rx
             .filter_map(move |event| async move {
-                match unpack(event) {
+                match event {
                     Ok(msg) => convert(msg).map(|v| stream::iter(v)),
                     Err(e) => {
                         warn!("Error on handling events: {}", e);
@@ -267,12 +266,6 @@ impl Drop for Cube {
             handle.abort();
         }
     }
-}
-
-fn unpack((uuid, value): (Uuid, Vec<u8>)) -> Result<Message> {
-    Ok((uuid.clone(), (&value as &[u8]))
-        .try_into()
-        .context(format!("Couldn't parse value: {:?}", value))?)
 }
 
 async fn update(status: &Arc<Mutex<Status>>, msg: Message) {

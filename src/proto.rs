@@ -423,6 +423,14 @@ impl TryFrom<(Uuid, &[u8])> for Message {
     }
 }
 
+impl TryFrom<(Uuid, Vec<u8>)> for Message {
+    type Error = Error;
+
+    fn try_from((uuid, buf): (Uuid, Vec<u8>)) -> Result<Self> {
+        (uuid, &buf as &[u8]).try_into()
+    }
+}
+
 impl TryFrom<Message> for (Uuid, Vec<u8>) {
     type Error = Error;
 
