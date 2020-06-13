@@ -121,25 +121,23 @@ impl Cube {
             (MotorDir::Back, (right * -1) as u8)
         };
 
-        let buf: Vec<u8> = if let Some(d) = duration {
+        let motor = if let Some(d) = duration {
             let d = d.as_millis();
             if d > 255 {
                 return Err(anyhow!("Duration must be less than 256 milliseconds"));
             }
-            let d = d.try_into()?;
+            let d = d as u8;
 
             Motor::Timed(MotorTimed::new(
                 0x01, left_dir, left, 0x02, right_dir, right, d,
             ))
-            .try_into()?
         } else {
             Motor::Simple(MotorSimple::new(
                 0x01, left_dir, left, 0x02, right_dir, right,
             ))
-            .try_into()?
         };
 
-        self.adaptor.write(&UUID_MOTOR, &buf, false).await?;
+        self.adaptor.write_msg(&UUID_MOTOR, motor, false).await?;
 
         Ok(())
     }

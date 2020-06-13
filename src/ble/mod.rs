@@ -1,4 +1,5 @@
-use anyhow::Result;
+use anyhow::{Context, Error, Result};
+use std::convert::TryInto;
 use tokio::sync::broadcast;
 
 #[macro_export]
@@ -35,6 +36,16 @@ pub trait PeripheralOps {
 
     /// Write with/without response.
     async fn write(&mut self, uuid: &Uuid, value: &[u8], with_resp: bool) -> Result<()>;
+
+    /// Write protocol message.
+    async fn write_msg<T>(&mut self, uuid: &Uuid, value: T, with_resp: bool) -> Result<()>
+    where
+        T: TryInto<Vec<u8>, Error = Error> + Send,
+    {
+        let value: Vec<u8> = value.try_into().context("Couldn't pack message")?;
+        self.write(uuid, &value, with_resp).await?;
+        Ok(())
+    }
 
     /// Subscribe to the peripheral.
     fn subscribe(&mut self) -> Result<Notifications>;
