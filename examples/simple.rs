@@ -1,25 +1,35 @@
 use std::time::Duration;
 use toio::Cube;
+use tokio::time::delay_for;
 
 #[tokio::main]
 async fn main() {
-    env_logger::init();
-
+    // Search for the nearest cube
     let mut cube = Cube::search().nearest().await.unwrap();
 
+    // Connect
     cube.connect().await.unwrap();
-    cube.go(10, 10, None).await.unwrap();
-    tokio::time::delay_for(Duration::from_secs(2)).await;
-    println!("version: {}", cube.protocol_version().await.unwrap());
-    cube.stop().await.unwrap();
-    tokio::time::delay_for(Duration::from_secs(2)).await;
+
+    // Move forward
     cube.go(20, 20, None).await.unwrap();
-    tokio::time::delay_for(Duration::from_secs(2)).await;
-    for _ in 0usize..100usize {
-        println!("slope: {}", cube.slope().await.unwrap());
-        println!("collision: {}", cube.collision().await.unwrap());
-        println!("battery: {}", cube.battery().await.unwrap());
-        tokio::time::delay_for(Duration::from_secs(1)).await;
-    }
+
+    delay_for(Duration::from_secs(3)).await;
+
+    // Move backward
+    cube.go(-15, -15, None).await.unwrap();
+
+    delay_for(Duration::from_secs(3)).await;
+
+    // Spin counterclockwise
+    cube.go(5, 50, None).await.unwrap();
+
+    delay_for(Duration::from_secs(3)).await;
+
+    // Spin clockwise
+    cube.go(50, 5, None).await.unwrap();
+
+    delay_for(Duration::from_secs(3)).await;
+
+    // Stop
     cube.stop().await.unwrap();
 }
