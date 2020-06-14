@@ -51,18 +51,22 @@ pub enum Sound {
     Ops(SoundOps),
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, new)]
-pub struct Slope {}
-
+/// The event sent when the status is updated.
 #[derive(Serialize, Deserialize, Debug, Clone, new)]
 pub enum Event {
+    /// Battery is updated.
     Battery(usize),
+    /// Set if the cube collides with an object.
     Collision(bool),
+    /// Set if the cube is on a slope.
     Slope(bool),
+    /// Set if the button is pressed.
     Button(bool),
+    /// The protocol version.
     Version(String),
 }
 
+/// The stream of events.
 pub type EventStream = BoxStream<'static, Event>;
 
 #[derive(Default, Debug)]
@@ -102,6 +106,7 @@ macro_rules! fetch_if_none {
     }};
 }
 
+/// The toio cube.
 pub struct Cube {
     dev: ble::Peripheral,
     status: Arc<Mutex<Status>>,
