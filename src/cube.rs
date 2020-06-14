@@ -17,6 +17,8 @@ use crate::{
     Searcher,
 };
 
+pub use crate::proto::Note;
+
 #[derive(Serialize, Deserialize, Debug, Clone, new)]
 pub struct LightOp {
     pub red: u8,
@@ -29,12 +31,6 @@ pub struct LightOp {
 pub struct Light {
     pub ops: Vec<LightOp>,
     pub repeat: usize,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, new)]
-pub enum Note {
-    A,
-    B,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, new)]
