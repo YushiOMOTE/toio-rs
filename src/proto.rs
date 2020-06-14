@@ -298,7 +298,8 @@ pub enum Note {
 }
 
 macro_rules! msg {
-    ($(#[$attr:meta])?pub enum $name:tt {
+    ($uuid:expr;
+     $(#[$attr:meta])?pub enum $name:tt {
         $(
             $(#[$vattr:meta])?
             $variant:ident$(($value:ident))? = $id:literal,
@@ -348,6 +349,14 @@ macro_rules! msg {
                 }
             }
         }
+
+        impl TryFrom<$name> for (Uuid, Vec<u8>) {
+            type Error = Error;
+
+            fn try_from(v: $name) -> Result<Self> {
+                Ok(($uuid, v.try_into()?))
+            }
+        }
     };
 }
 
@@ -378,6 +387,8 @@ pub struct IdStd {
 }
 
 msg!(
+    UUID_ID;
+
     #[doc = "Message from the id reader."]
     pub enum Id {
         #[doc = "The content of the position id."]
@@ -423,6 +434,8 @@ pub struct MotionDetect {
 }
 
 msg!(
+    UUID_MOTION;
+
     #[doc = "Message from the motion sensor."]
     pub enum Motion {
         #[doc = "The state of the motion sensor."]
@@ -441,6 +454,8 @@ pub enum ButtonState {
 }
 
 msg!(
+    UUID_BUTTON;
+
     #[doc = "Message from the button."]
     pub enum Button {
         #[doc = "The state of the button."]
@@ -670,6 +685,8 @@ pub struct MotorTargetRes {
 }
 
 msg!(
+    UUID_MOTOR;
+
     #[doc = "Message from/to the motor."]
     pub enum Motor {
         #[doc = "Simple request."]
@@ -731,6 +748,8 @@ pub struct LightControl {
 }
 
 msg!(
+    UUID_LIGHT;
+
     #[doc = "Message to lights."]
     pub enum Light {
         #[doc = "Turns off all the lights."]
@@ -804,6 +823,8 @@ pub struct SoundPlay {
 }
 
 msg!(
+    UUID_SOUND;
+
     #[doc = "Message to the sound device."]
     pub enum Sound {
         #[doc = "Stops."]
@@ -864,6 +885,8 @@ pub struct ConfigVersionRes {
 }
 
 msg!(
+    UUID_CONFIG;
+
     #[doc = "Message from/to configuration."]
     pub enum Config {
         #[doc = "Requests protocol version."]

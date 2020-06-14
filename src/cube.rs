@@ -133,7 +133,7 @@ impl Cube {
     pub async fn version(&mut self) -> Result<String> {
         fetch_if_none!(self, version, Version, {
             self.dev
-                .write_msg(Message::Config(Config::Version(ConfigVersion::new())), true)
+                .write_msg(Config::Version(ConfigVersion::new()), true)
                 .await?;
             self.dev.read(&UUID_CONFIG).await?;
         })
@@ -217,7 +217,7 @@ impl Cube {
             ))
         };
 
-        self.dev.write_msg(Message::Motor(motor), false).await?;
+        self.dev.write_msg(motor, false).await?;
 
         Ok(())
     }
