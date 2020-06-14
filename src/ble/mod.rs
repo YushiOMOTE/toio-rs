@@ -50,6 +50,9 @@ pub trait PeripheralOps {
     /// Connect to the peripheral.
     async fn connect(&mut self) -> Result<()>;
 
+    /// Disconnect the peripheral.
+    async fn disconnect(&mut self) -> Result<()>;
+
     /// Send a read request.
     async fn read(&mut self, uuid: &Uuid) -> Result<()>;
 
@@ -104,6 +107,11 @@ where
     /// Connect to the peripheral.
     async fn connect(&mut self) -> Result<()> {
         (**self).connect().await
+    }
+
+    /// Disconnect the peripheral.
+    async fn disconnect(&mut self) -> Result<()> {
+        (**self).disconnect().await
     }
 
     /// Send a read request.

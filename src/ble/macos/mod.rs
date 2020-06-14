@@ -51,6 +51,12 @@ impl Adaptor {
     }
 }
 
+impl Drop for Adaptor {
+    fn drop(&mut self) {
+        self.manager.disconnect(&self.peripheral);
+    }
+}
+
 #[async_trait::async_trait]
 impl PeripheralOps for Adaptor {
     fn rssi(&self) -> i32 {
@@ -78,6 +84,36 @@ impl PeripheralOps for Adaptor {
                                 .into_iter()
                                 .map(|c| (c.id().clone(), c))
                                 .collect();
+                            return Ok::<_, Error>(());
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        };
+
+        timeout(CONNECT_TIMEOUT, connect).await??;
+
+        Ok(())
+    }
+
+    async fn disconnect(&mut self) -> Result<()> {
+        let mut rx = self.manager.subscribe();
+
+        self.manager.disconnect(&self.peripheral);
+
+        let id = self.peripheral.id();
+        let connect = async {
+            loop {
+                let event = rx
+                    .recv()
+                    .await
+                    .context("Internal channel closed while waiting for disconnection result")?;
+
+                match event {
+                    Event::Disconnected(peripheral) => {
+                        if peripheral.id() == id {
+                            debug!("Disconnected peripheral {}", peripheral.id());
                             return Ok::<_, Error>(());
                         }
                     }
