@@ -66,14 +66,13 @@ pub trait PeripheralOps {
 #[async_trait::async_trait]
 pub trait PeripheralOpsExt: PeripheralOps {
     /// Write protocol message.
-    async fn write_msg<T>(&mut self, uuid: &Uuid, value: T, with_resp: bool) -> Result<()>
+    async fn write_msg<T>(&mut self, value: T, with_resp: bool) -> Result<()>
     where
-        T: TryInto<Vec<u8>, Error = Error> + Send,
+        T: TryInto<(Uuid, Vec<u8>), Error = Error> + Send,
     {
-        let value: Vec<u8> = value
-            .try_into()
-            .context(format!("Couldn't pack message to characteristic {}", uuid))?;
-        self.write(uuid, &value, with_resp).await?;
+        let (uuid, value): (Uuid, Vec<u8>) =
+            value.try_into().context(format!("Couldn't pack message"))?;
+        self.write(&uuid, &value, with_resp).await?;
         Ok(())
     }
 

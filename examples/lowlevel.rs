@@ -20,15 +20,14 @@ async fn main() {
 
     peripheral
         .write_msg(
-            &UUID_MOTOR,
-            Motor::Simple(MotorSimple::new(
+            Message::Motor(Motor::Simple(MotorSimple::new(
                 MotorId::Left,
                 MotorDir::Forward,
                 30,
                 MotorId::Right,
                 MotorDir::Forward,
                 30,
-            )),
+            ))),
             false,
         )
         .await
