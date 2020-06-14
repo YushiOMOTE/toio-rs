@@ -881,7 +881,7 @@ pub struct ConfigVersionRes {
     #[new(default)]
     pub reserved: u8,
     /// The protocol version.
-    pub version: [u8; 5],
+    pub version: String,
 }
 
 msg!(

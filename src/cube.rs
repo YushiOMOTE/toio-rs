@@ -324,9 +324,7 @@ fn convert(msg: Message) -> Option<Vec<Event>> {
         }
         Message::Button(Button::Func(b)) => Some(vec![Event::Button(b == ButtonState::Pressed)]),
         Message::Battery(v) => Some(vec![Event::Battery(v as usize)]),
-        Message::Config(Config::VersionRes(v)) => Some(vec![Event::Version(
-            String::from_utf8_lossy(&v.version).to_string(),
-        )]),
+        Message::Config(Config::VersionRes(v)) => Some(vec![Event::Version(v.version)]),
         _ => None,
     }
 }
