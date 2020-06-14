@@ -3,6 +3,7 @@ use toio::{
     proto::*,
 };
 
+use futures::prelude::*;
 use std::time::Duration;
 use tokio::time::delay_for;
 
@@ -32,6 +33,22 @@ async fn main() {
         )
         .await
         .unwrap();
+
+    delay_for(Duration::from_secs(2)).await;
+
+    let mut events = peripheral.subscribe_msg().unwrap();
+
+    peripheral.read(&UUID_MOTION).await.unwrap();
+
+    while let Some(event) = events.next().await {
+        match event.unwrap() {
+            Message::Motion(Motion::Detect(d)) => {
+                println!("{:?}", d);
+                break;
+            }
+            _ => {}
+        }
+    }
 
     delay_for(Duration::from_secs(2)).await;
 }
