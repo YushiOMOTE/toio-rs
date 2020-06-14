@@ -1,6 +1,6 @@
 # toio-rs
 
-toio driver in Rust
+[toio](https://toio.io/) driver in Rust
 
 ```rust
 use std::time::Duration;
