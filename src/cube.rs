@@ -64,6 +64,7 @@ pub enum Event {
     Collision(bool),
     Slope(bool),
     Button(bool),
+    Version(String),
 }
 
 pub type EventStream = BoxStream<'static, Event>;
@@ -75,6 +76,7 @@ struct Status {
     collision: Option<bool>,
     slope: Option<bool>,
     button: Option<bool>,
+    version: Option<String>,
 }
 
 pub struct Cube {
@@ -223,15 +225,10 @@ impl Cube {
     /// Connect the cube.
     pub async fn connect(&mut self) -> Result<()> {
         let status = self.status.clone();
-        let mut rx = self.dev.subscribe_msg()?;
+        let mut rx = self.events().await?;
         let (forward, handle) = abortable(async move {
-            while let Some(msg) = rx.next().await {
-                match msg {
-                    Ok(msg) => update(&status, msg).await,
-                    Err(e) => {
-                        warn!("Error on updating status: {}", e);
-                    }
-                }
+            while let Some(event) = rx.next().await {
+                update(&status, event).await
             }
         });
         tokio::spawn(forward);
@@ -268,30 +265,24 @@ impl Drop for Cube {
     }
 }
 
-async fn update(status: &Arc<Mutex<Status>>, msg: Message) {
-    match msg {
-        Message::Motion(Motion::Detect(m)) => {
-            debug!("Updated motion: {:?}", m);
-            let mut status = status.lock().await;
-            status.slope = Some(!m.even);
-            status.collision = Some(m.collision);
+async fn update(status: &Arc<Mutex<Status>>, event: Event) {
+    let mut status = status.lock().await;
+    match event {
+        Event::Slope(s) => {
+            status.slope = Some(s);
         }
-        Message::Button(Button::Func(b)) => {
-            debug!("Updated button: {:?}", b);
-            let mut status = status.lock().await;
-            status.button = Some(b == ButtonState::Pressed)
+        Event::Collision(c) => {
+            status.collision = Some(c);
         }
-        Message::Battery(v) => {
-            debug!("Updated battery: {:?}", v);
-            let mut status = status.lock().await;
-            status.battery = Some(v as usize);
+        Event::Button(b) => {
+            status.button = Some(b);
         }
-        Message::Config(Config::ProtocolVersionRes(v)) => {
-            debug!("Updated protocol version: {:?}", v);
-            let mut status = status.lock().await;
-            status.protocol_version = Some(String::from_utf8_lossy(&v.version).to_string());
+        Event::Battery(b) => {
+            status.battery = Some(b);
         }
-        _ => {}
+        Event::Version(b) => {
+            status.version = Some(b);
+        }
     }
 }
 
@@ -302,6 +293,9 @@ fn convert(msg: Message) -> Option<Vec<Event>> {
         }
         Message::Button(Button::Func(b)) => Some(vec![Event::Button(b == ButtonState::Pressed)]),
         Message::Battery(v) => Some(vec![Event::Battery(v as usize)]),
+        Message::Config(Config::ProtocolVersionRes(v)) => Some(vec![Event::Version(
+            String::from_utf8_lossy(&v.version).to_string(),
+        )]),
         _ => None,
     }
 }
