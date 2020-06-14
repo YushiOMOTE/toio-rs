@@ -738,7 +738,7 @@ pub struct LightOn {
 
 /// Control lights in accordance with the list of operations.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, new)]
-pub struct LightControl {
+pub struct LightCtrl {
     /// The repeat count.
     pub repeat: u8,
     /// The number of operations.
@@ -759,7 +759,7 @@ msg!(
         #[doc = "Turns on a light."]
         On(LightOn) = 0x03,
         #[doc = "Control lights with the list of operations."]
-        Control(LightControl) = 0x04,
+        Ctrl(LightCtrl) = 0x04,
     }
 );
 
