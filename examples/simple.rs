@@ -12,6 +12,13 @@ async fn main() {
     // Connect
     cube.connect().await.unwrap();
 
+    // Print status
+    println!("version   : {}", cube.version().await.unwrap());
+    println!("battery   : {}%", cube.battery().await.unwrap());
+    println!("slope     : {}", cube.slope().await.unwrap());
+    println!("collision : {}", cube.collision().await.unwrap());
+    println!("button    : {}", cube.button().await.unwrap());
+
     // Move forward
     cube.go(20, 20, None).await.unwrap();
 

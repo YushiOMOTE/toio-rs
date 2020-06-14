@@ -130,6 +130,7 @@ impl PeripheralOps for Adaptor {
     async fn read(&mut self, uuid: &ble::Uuid) -> Result<()> {
         let uuid = Uuid::from_bytes(uuid.0);
         let c = self.ch(&uuid)?;
+        debug!("Sending read request to characteristic {}", c.id());
         self.peripheral.read_characteristic(c);
         Ok(())
     }

@@ -173,19 +173,16 @@ impl Inner {
                 characteristics,
             } => match characteristics {
                 Ok(characteristics) => {
-                    for c in characteristics.iter() {
-                        if c.properties().can_read() {
-                            debug!("Read characteristic {} of {}", c.id(), peripheral.id());
-                            peripheral.read_characteristic(&c);
-                        }
-                        if c.properties().can_notify() {
-                            debug!(
-                                "Subscribing to characteristic {} of {}",
-                                c.id(),
-                                peripheral.id()
-                            );
-                            peripheral.subscribe(&c);
-                        }
+                    for c in characteristics
+                        .iter()
+                        .filter(|c| c.properties().can_notify())
+                    {
+                        debug!(
+                            "Subscribing to characteristic {} of {}",
+                            c.id(),
+                            peripheral.id()
+                        );
+                        peripheral.subscribe(&c);
                     }
 
                     let _ = self

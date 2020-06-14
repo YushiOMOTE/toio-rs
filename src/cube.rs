@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use derive_new::new;
 use futures::{
     future::{abortable, AbortHandle},
@@ -9,7 +9,7 @@ use log::*;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::Mutex;
+use tokio::{sync::Mutex, time::timeout};
 
 use crate::{
     ble::{self, PeripheralOps, PeripheralOpsExt},
@@ -71,12 +71,39 @@ pub type EventStream = BoxStream<'static, Event>;
 
 #[derive(Default, Debug)]
 struct Status {
-    protocol_version: Option<String>,
+    version: Option<String>,
     battery: Option<usize>,
     collision: Option<bool>,
     slope: Option<bool>,
     button: Option<bool>,
-    version: Option<String>,
+}
+
+macro_rules! fetch_if_none {
+    ($self:tt, $field:tt, $msg:tt, { $($t:tt)* }) => {{
+        let mut events = $self.events().await?;
+
+        $($t)*
+
+        if $self.status.lock().await.$field.is_none() {
+            Ok(timeout(READ_TIMEOUT, async move {
+                while let Some(event) = events.next().await {
+                    match event {
+                        Event::$msg(v) => return Ok(v),
+                        _ => {}
+                    }
+                }
+                Err(anyhow!("Stream ends while requesting protocol version"))
+            })
+            .await.context(format!("Couldn't read {}", stringify!($field)))??)
+        } else {
+            $self.status
+                .lock()
+                .await
+                .$field
+                .clone()
+                .ok_or_else(|| anyhow!("Couldn't read {}", stringify!($field)))
+        }
+    }};
 }
 
 pub struct Cube {
@@ -84,6 +111,8 @@ pub struct Cube {
     status: Arc<Mutex<Status>>,
     handle: Option<AbortHandle>,
 }
+
+const READ_TIMEOUT: Duration = Duration::from_secs(2);
 
 impl Cube {
     pub(crate) fn new(dev: ble::Peripheral) -> Self {
@@ -100,53 +129,45 @@ impl Cube {
     }
 
     /// Get the BLE protocol version.
-    pub async fn protocol_version(&mut self) -> Result<String> {
-        self.status
-            .lock()
-            .await
-            .protocol_version
-            .clone()
-            .ok_or_else(|| anyhow!("Couldn't read protocol version"))
+    pub async fn version(&mut self) -> Result<String> {
+        fetch_if_none!(self, version, Version, {
+            self.dev
+                .write_msg(
+                    &UUID_CONFIG,
+                    Config::ProtocolVersion(ProtocolVersion::new()),
+                    true,
+                )
+                .await?;
+            self.dev.read(&UUID_CONFIG).await?;
+        })
     }
 
     /// Get the battery status.
     pub async fn battery(&mut self) -> Result<usize> {
-        self.status
-            .lock()
-            .await
-            .battery
-            .clone()
-            .ok_or_else(|| anyhow!("Couldn't read battery"))
+        fetch_if_none!(self, battery, Battery, {
+            self.dev.read(&UUID_BATTERY).await?;
+        })
     }
 
     /// Get the collision status.
     pub async fn collision(&mut self) -> Result<bool> {
-        self.status
-            .lock()
-            .await
-            .collision
-            .clone()
-            .ok_or_else(|| anyhow!("Couldn't read collision"))
+        fetch_if_none!(self, collision, Collision, {
+            self.dev.read(&UUID_MOTION).await?;
+        })
     }
 
     /// Get the slope status.
     pub async fn slope(&mut self) -> Result<bool> {
-        self.status
-            .lock()
-            .await
-            .slope
-            .clone()
-            .ok_or_else(|| anyhow!("Couldn't read slope"))
+        fetch_if_none!(self, slope, Slope, {
+            self.dev.read(&UUID_MOTION).await?;
+        })
     }
 
     /// Get the button status.
     pub async fn button(&mut self) -> Result<bool> {
-        self.status
-            .lock()
-            .await
-            .button
-            .clone()
-            .ok_or_else(|| anyhow!("Couldn't read button"))
+        fetch_if_none!(self, button, Button, {
+            self.dev.read(&UUID_BUTTON).await?;
+        })
     }
 
     /// Move the cube.
