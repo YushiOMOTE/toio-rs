@@ -180,16 +180,18 @@ impl Cube {
         if left < -100 || left > 100 || right < -100 || right > 100 {
             return Err(anyhow!("Motor speed must be between -100 and 100"));
         }
-        let (left_dir, left) = if left > 0 {
-            (MotorDir::Forward, left as u8)
-        } else {
-            (MotorDir::Back, (left * -1) as u8)
+        let adjust = |v: isize| {
+            (
+                if v > 0 {
+                    MotorDir::Forward
+                } else {
+                    MotorDir::Back
+                },
+                (v.abs() * 255 / 100) as u8,
+            )
         };
-        let (right_dir, right) = if right > 0 {
-            (MotorDir::Forward, right as u8)
-        } else {
-            (MotorDir::Back, (right * -1) as u8)
-        };
+        let (left_dir, left) = adjust(left);
+        let (right_dir, right) = adjust(right);
 
         let motor = if let Some(d) = duration {
             let d = d.as_millis();
