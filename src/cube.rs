@@ -132,11 +132,7 @@ impl Cube {
     pub async fn version(&mut self) -> Result<String> {
         fetch_if_none!(self, version, Version, {
             self.dev
-                .write_msg(
-                    &UUID_CONFIG,
-                    Config::ProtocolVersion(ProtocolVersion::new()),
-                    true,
-                )
+                .write_msg(&UUID_CONFIG, Config::Version(ConfigVersion::new()), true)
                 .await?;
             self.dev.read(&UUID_CONFIG).await?;
         })
@@ -185,7 +181,7 @@ impl Cube {
                 if v > 0 {
                     MotorDir::Forward
                 } else {
-                    MotorDir::Back
+                    MotorDir::Backward
                 },
                 (v.abs() * 255 / 100) as u8,
             )
@@ -201,11 +197,22 @@ impl Cube {
             let d = d as u8;
 
             Motor::Timed(MotorTimed::new(
-                0x01, left_dir, left, 0x02, right_dir, right, d,
+                MotorId::Left,
+                left_dir,
+                left,
+                MotorId::Right,
+                right_dir,
+                right,
+                d,
             ))
         } else {
             Motor::Simple(MotorSimple::new(
-                0x01, left_dir, left, 0x02, right_dir, right,
+                MotorId::Left,
+                left_dir,
+                left,
+                MotorId::Right,
+                right_dir,
+                right,
             ))
         };
 
@@ -312,11 +319,11 @@ async fn update(status: &Arc<Mutex<Status>>, event: Event) {
 fn convert(msg: Message) -> Option<Vec<Event>> {
     match msg {
         Message::Motion(Motion::Detect(m)) => {
-            Some(vec![Event::Slope(!m.even), Event::Collision(m.collision)])
+            Some(vec![Event::Slope(!m.level), Event::Collision(m.collision)])
         }
         Message::Button(Button::Func(b)) => Some(vec![Event::Button(b == ButtonState::Pressed)]),
         Message::Battery(v) => Some(vec![Event::Battery(v as usize)]),
-        Message::Config(Config::ProtocolVersionRes(v)) => Some(vec![Event::Version(
+        Message::Config(Config::VersionRes(v)) => Some(vec![Event::Version(
             String::from_utf8_lossy(&v.version).to_string(),
         )]),
         _ => None,
