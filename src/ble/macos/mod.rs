@@ -9,11 +9,13 @@ use std::time::Duration;
 
 use tokio::time::timeout;
 
-use core_bluetooth::central::{
-    characteristic::{Characteristic, WriteKind},
-    peripheral::Peripheral,
+use core_bluetooth::{
+    central::{
+        characteristic::{Characteristic, WriteKind},
+        peripheral::Peripheral,
+    },
+    uuid::Uuid,
 };
-use core_bluetooth::uuid::Uuid;
 
 mod connection;
 
@@ -185,11 +187,7 @@ impl SearchOps for Searcher {
         let uuid = Uuid::from_bytes(uuid.0);
 
         let mut rx = self.manager.subscribe();
-
-        self.manager
-            .central()
-            .get_peripherals_with_services(&[uuid.clone()]);
-        self.manager.central().scan();
+        self.manager.discover(&uuid);
 
         let mut found = Vec::new();
         let discover = async {

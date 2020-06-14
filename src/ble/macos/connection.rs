@@ -1,9 +1,10 @@
 use anyhow::{bail, Result};
 use core_bluetooth::central::*;
-use core_bluetooth::central::{
-    characteristic::Characteristic, peripheral::Peripheral, AdvertisementData,
-};
 use core_bluetooth::*;
+use core_bluetooth::{
+    central::{characteristic::Characteristic, peripheral::Peripheral, AdvertisementData},
+    uuid::Uuid,
+};
 use futures::{
     future::{abortable, AbortHandle},
     prelude::*,
@@ -27,6 +28,7 @@ enum InnerMsg {
     Connect(Peripheral),
     Disconnect(Peripheral),
     Event(CentralEvent),
+    Discover(Uuid),
 }
 
 struct Inner {
@@ -63,6 +65,10 @@ impl Inner {
                 }
                 InnerMsg::Event(e) => {
                     self.on_event(e).await?;
+                }
+                InnerMsg::Discover(uuid) => {
+                    self.central.get_peripherals_with_services(&[uuid]);
+                    self.central.scan();
                 }
             }
         }
@@ -228,7 +234,6 @@ impl Inner {
 }
 
 pub struct ConnectionManager {
-    central: Option<CentralManager>,
     thread: Option<std::thread::JoinHandle<Result<()>>>,
     client_tx: broadcast::Sender<Event>,
     manager_tx: mpsc::UnboundedSender<InnerMsg>,
@@ -241,7 +246,7 @@ impl ConnectionManager {
         let (client_tx, _) = broadcast::channel(CHANNEL_CAPACITY);
         let (central, central_rx) = CentralManager::new();
 
-        let mut inner = Inner::new(central.clone(), client_tx.clone(), manager_rx);
+        let mut inner = Inner::new(central, client_tx.clone(), manager_rx);
         let (inner, inner_handle) = abortable(async move {
             if let Err(e) = inner.run().await {
                 error!("Error in connection manager: {}", e);
@@ -259,7 +264,6 @@ impl ConnectionManager {
         });
 
         Self {
-            central: Some(central),
             thread: Some(thread),
             client_tx,
             manager_tx,
@@ -267,8 +271,8 @@ impl ConnectionManager {
         }
     }
 
-    pub fn central(&self) -> &CentralManager {
-        self.central.as_ref().unwrap()
+    pub fn discover(&self, uuid: &Uuid) {
+        let _ = self.manager_tx.send(InnerMsg::Discover(uuid.clone()));
     }
 
     pub fn connect(&self, p: &Peripheral) {
@@ -288,9 +292,6 @@ impl Drop for ConnectionManager {
     fn drop(&mut self) {
         // Abort inner thread.
         self.inner_handle.abort();
-
-        // Drop central to stop receiving events.
-        self.central.take();
 
         if let Some(thread) = self.thread.take() {
             let _ = thread.join();
