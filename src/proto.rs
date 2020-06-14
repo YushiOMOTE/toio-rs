@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::convert::{TryFrom, TryInto};
 
-use crate::{ble::Uuid, uuid};
+use crate::{ble::Uuid, decode::decode, encode::encode, uuid};
 
 /// The UUID of the toio cube service.
 pub const UUID_SERVICE: Uuid = uuid!("10b20100 5b3b 4571 9508 cf3efcd7bbae");
@@ -320,7 +320,7 @@ macro_rules! msg {
 
             fn try_from(v: &[u8]) -> Result<Self> {
                 match v.get(0) {
-                    $(Some($id) => Ok(Self::$variant$((bincode::deserialize::<$value>(&v[1..])?))? ),)*
+                    $(Some($id) => Ok(Self::$variant$((decode::<$value>(&v[1..])?))? ),)*
                     Some(v) => Err(anyhow!("Invalid type {} for {}", v, stringify!(Self))),
                     None => Err(anyhow!("Empty bytes for {}", stringify!(Self))),
                 }
@@ -343,7 +343,7 @@ macro_rules! msg {
                 match &v {
                     $($name::$variant$(($value))? => {
                         let mut buf = vec![$id];
-                        $(bincode::serialize_into(&mut buf, &$value)?;)?
+                        $(encode(&mut buf, &$value)?;)?
                         Ok(buf)
                     },)*
                 }
