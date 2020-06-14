@@ -17,37 +17,54 @@ use crate::{
     Searcher,
 };
 
-pub use crate::proto::Note;
+pub use crate::proto::{Note, SoundPresetId};
 
+/// A light operation.
 #[derive(Serialize, Deserialize, Debug, Clone, new)]
 pub struct LightOp {
+    /// The value of red light.
     pub red: u8,
+    /// The value of green light.
     pub green: u8,
+    /// The value of blue light.
     pub blue: u8,
-    pub duration: Duration,
+    /// Duration to turn on the light.
+    pub duration: Option<Duration>,
 }
 
+/// Light operations.
 #[derive(Serialize, Deserialize, Debug, Clone, new)]
-pub struct Light {
+pub struct LightOps {
+    /// The list of light operations.
     pub ops: Vec<LightOp>,
+    /// The repeat count.
     pub repeat: usize,
 }
 
+/// A sound operation.
 #[derive(Serialize, Deserialize, Debug, Clone, new)]
 pub struct SoundOp {
+    /// Sound note.
     pub note: Note,
+    /// Duration to play sound.
     pub duration: Duration,
 }
 
+/// Sound operations.
 #[derive(Serialize, Deserialize, Debug, Clone, new)]
 pub struct SoundOps {
+    /// The list of sound operations.
     pub ops: Vec<SoundOp>,
+    /// The repeat count.
     pub repeat: usize,
 }
 
+/// Sound information to play.
 #[derive(Serialize, Deserialize, Debug, Clone, new)]
 pub enum Sound {
-    Preset(usize),
+    /// Sound preset.
+    Preset(SoundPresetId),
+    /// Sound operations.
     Ops(SoundOps),
 }
 
@@ -85,7 +102,7 @@ macro_rules! fetch_if_none {
         $($t)*
 
         if $self.status.lock().await.$field.is_none() {
-            Ok(timeout(READ_TIMEOUT, async move {
+            Ok(timeout(TIMEOUT, async move {
                 while let Some(event) = events.next().await {
                     match event {
                         Event::$msg(v) => return Ok(v),
@@ -94,7 +111,7 @@ macro_rules! fetch_if_none {
                 }
                 Err(anyhow!("Stream ends while requesting protocol version"))
             })
-            .await.context(format!("Couldn't read {}", stringify!($field)))??)
+               .await.context(format!("Couldn't read {}", stringify!($field)))??)
         } else {
             $self.status
                 .lock()
@@ -113,7 +130,7 @@ pub struct Cube {
     handle: Option<AbortHandle>,
 }
 
-const READ_TIMEOUT: Duration = Duration::from_secs(2);
+const TIMEOUT: Duration = Duration::from_secs(2);
 
 impl Cube {
     pub(crate) fn new(dev: ble::Peripheral) -> Self {
@@ -239,8 +256,44 @@ impl Cube {
     }
 
     /// Change the light status.
-    pub async fn light(&mut self, _light: Light) -> Result<()> {
-        unimplemented!()
+    pub async fn light(&mut self, light: LightOps) -> Result<()> {
+        if light.ops.len() == 0 || light.ops.len() > 30 {
+            return Err(anyhow!("The number of operations must be from 1 to 29"));
+        }
+        if light.repeat > 255 {
+            return Err(anyhow!("The repeat count must be less than 256"));
+        }
+
+        let ops: Result<Vec<_>> = light
+            .ops
+            .iter()
+            .map(|op| {
+                let d = op
+                    .duration
+                    .as_ref()
+                    .map(|d| d.as_millis() / 10)
+                    .unwrap_or(0);
+
+                if d > 255 {
+                    return Err(anyhow!("The duration must be less than 2550 milliseconds"));
+                }
+
+                Ok(LightOn::new(d as u8, op.red, op.green, op.blue))
+            })
+            .collect();
+
+        self.dev
+            .write_msg(
+                Light::Control(LightControl::new(
+                    light.repeat as u8,
+                    light.ops.len() as u8,
+                    ops?,
+                )),
+                true,
+            )
+            .await?;
+
+        Ok(())
     }
 
     /// Turn on the light.

@@ -6,5 +6,5 @@ mod cube;
 mod searcher;
 
 pub use ble::Uuid;
-pub use cube::*;
+pub use cube::{Cube, Event, EventStream, LightOp, LightOps, Sound, SoundOp, SoundOps};
 pub use searcher::*;
