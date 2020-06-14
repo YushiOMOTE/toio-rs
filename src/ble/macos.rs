@@ -1,16 +1,19 @@
 use crate::ble::{self, PeripheralOps, SearchOps, ValueStream};
 
 use anyhow::{anyhow, bail, Context, Error, Result};
-use futures::prelude::*;
-use log::*;
-use std::collections::HashMap;
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
+use futures::{
+    future::{abortable, AbortHandle},
+    prelude::*,
 };
+use log::*;
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 use std::time::Duration;
 
-use tokio::{sync::broadcast, time::timeout};
+use tokio::{
+    sync::{broadcast, mpsc},
+    time::timeout,
+};
 
 use core_bluetooth::central::*;
 use core_bluetooth::central::{
@@ -27,51 +30,19 @@ const WRITE_TIMEOUT: Duration = Duration::from_secs(1);
 const CHANNEL_CAPACITY: usize = 100000;
 
 pub struct Adaptor {
-    central: CentralManager,
     peripheral: Peripheral,
     rssi: i32,
-    connected: Arc<AtomicBool>,
     characteristics: HashMap<Uuid, Characteristic>,
-    backend: Arc<Backend>,
+    manager: Arc<ConnectionManager>,
 }
 
 impl Adaptor {
-    fn new(
-        central: CentralManager,
-        peripheral: Peripheral,
-        rssi: i32,
-        backend: Arc<Backend>,
-    ) -> Self {
-        let connected = Arc::new(AtomicBool::new(false));
-        let mut rx = backend.subscribe();
-
-        let id = peripheral.id();
-        let conn = connected.clone();
-        let cen = central.clone();
-        tokio::spawn(async move {
-            loop {
-                if let Ok(event) = rx.recv().await {
-                    match event {
-                        Event::Connected(peripheral, _) if peripheral.id() == id => {
-                            conn.store(true, Ordering::SeqCst);
-                        }
-                        Event::Disconnected(peripheral) if peripheral.id() == id => {
-                            conn.store(false, Ordering::SeqCst);
-                            cen.connect(&peripheral);
-                        }
-                        _ => {}
-                    }
-                }
-            }
-        });
-
+    fn new(peripheral: Peripheral, rssi: i32, manager: Arc<ConnectionManager>) -> Self {
         Self {
-            central,
             peripheral,
             rssi,
-            connected,
             characteristics: HashMap::new(),
-            backend,
+            manager,
         }
     }
 
@@ -91,9 +62,9 @@ impl PeripheralOps for Adaptor {
     }
 
     async fn connect(&mut self) -> Result<()> {
-        let mut rx = self.backend.subscribe();
+        let mut rx = self.manager.subscribe();
 
-        self.central.connect(&self.peripheral);
+        self.manager.connect(&self.peripheral);
 
         let id = self.peripheral.id();
         let connect = async {
@@ -132,7 +103,7 @@ impl PeripheralOps for Adaptor {
     }
 
     async fn write(&mut self, uuid: &ble::Uuid, value: &[u8], with_resp: bool) -> Result<()> {
-        let mut rx = self.backend.subscribe();
+        let mut rx = self.manager.subscribe();
 
         let uuid = Uuid::from_bytes(uuid.0);
         let c = self.ch(&uuid)?;
@@ -181,7 +152,7 @@ impl PeripheralOps for Adaptor {
     }
 
     fn subscribe(&mut self) -> Result<ValueStream> {
-        let rx = self.backend.subscribe();
+        let rx = self.manager.subscribe();
         let id = self.peripheral.id();
 
         Ok(rx
@@ -203,13 +174,13 @@ pub fn searcher() -> ble::Searcher {
 }
 
 pub struct Searcher {
-    backend: Arc<Backend>,
+    manager: Arc<ConnectionManager>,
 }
 
 impl Searcher {
     pub fn new() -> Self {
         Self {
-            backend: Arc::new(Backend::new()),
+            manager: Arc::new(ConnectionManager::new()),
         }
     }
 }
@@ -219,15 +190,14 @@ impl SearchOps for Searcher {
     async fn search(&mut self, uuid: &ble::Uuid) -> Result<Vec<ble::Peripheral>> {
         let uuid = Uuid::from_bytes(uuid.0);
 
-        let mut rx = self.backend.subscribe();
+        let mut rx = self.manager.subscribe();
 
-        self.backend
+        self.manager
             .central()
             .get_peripherals_with_services(&[uuid.clone()]);
-        self.backend.central().scan();
+        self.manager.central().scan();
 
         let mut found = Vec::new();
-        let central = self.backend.central().clone();
         let discover = async {
             loop {
                 let event = rx
@@ -240,10 +210,9 @@ impl SearchOps for Searcher {
                         if ad.service_uuids().contains(&uuid) {
                             debug!("Discovered peripheral: {:?}", peripheral);
                             found.push(Box::new(Adaptor::new(
-                                central.clone(),
                                 peripheral,
                                 rssi,
-                                self.backend.clone(),
+                                self.manager.clone(),
                             )) as ble::Peripheral);
                         }
                     }
@@ -272,14 +241,54 @@ pub enum Event {
     WriteRes(Peripheral, Characteristic, bool),
 }
 
-struct ConnectionManager;
+enum InnerMsg {
+    Connect(Peripheral),
+    Disconnect(Peripheral),
+    Event(CentralEvent),
+}
 
-impl ConnectionManager {
-    fn new() -> Self {
-        Self
+struct Inner {
+    central: CentralManager,
+    client_tx: broadcast::Sender<Event>,
+    manager_rx: mpsc::UnboundedReceiver<InnerMsg>,
+    connected: HashSet<Peripheral>,
+}
+
+impl Inner {
+    fn new(
+        central: CentralManager,
+        client_tx: broadcast::Sender<Event>,
+        manager_rx: mpsc::UnboundedReceiver<InnerMsg>,
+    ) -> Self {
+        Self {
+            central,
+            client_tx,
+            manager_rx,
+            connected: HashSet::new(),
+        }
     }
 
-    fn handle_event(&self, event: CentralEvent) -> Result<Option<Event>> {
+    async fn run(&mut self) -> Result<()> {
+        while let Some(msg) = self.manager_rx.next().await {
+            match msg {
+                InnerMsg::Connect(p) => {
+                    self.connected.insert(p.clone());
+                    self.central.connect(&p);
+                }
+                InnerMsg::Disconnect(p) => {
+                    self.connected.remove(&p);
+                    self.central.cancel_connect(&p);
+                }
+                InnerMsg::Event(e) => {
+                    self.on_event(e).await?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn on_event(&mut self, event: CentralEvent) -> Result<()> {
         trace!("Event: {:?}", event);
 
         match event {
@@ -309,11 +318,11 @@ impl ConnectionManager {
                     advertisement_data.local_name()
                 );
                 if advertisement_data.is_connectable() != Some(false) {
-                    return Ok(Some(Event::Discovered(
+                    let _ = self.client_tx.send(Event::Discovered(
                         peripheral,
                         advertisement_data,
                         rssi,
-                    )));
+                    ));
                 }
             }
             CentralEvent::GetPeripheralsWithServicesResult {
@@ -327,17 +336,24 @@ impl ConnectionManager {
                 peripheral,
                 error: _,
             } => {
-                return Ok(Some(Event::Disconnected(peripheral)));
+                if self.connected.contains(&peripheral) {
+                    warn!("Reconnecting to {}", peripheral.id());
+                    self.central.connect(&peripheral);
+                } else {
+                    let _ = self.client_tx.send(Event::Disconnected(peripheral));
+                }
             }
             CentralEvent::PeripheralConnectFailed { peripheral, error } => {
-                warn!(
-                    "Couldn't connect to peripheral {}: {}",
-                    peripheral.id(),
-                    error
-                        .map(|e| e.to_string())
-                        .unwrap_or_else(|| "<no error>".into())
-                );
-                return Ok(Some(Event::Disconnected(peripheral)));
+                if self.connected.contains(&peripheral) {
+                    warn!(
+                        "Couldn't connect to peripheral {}: {}",
+                        peripheral.id(),
+                        error
+                            .map(|e| e.to_string())
+                            .unwrap_or_else(|| "<no error>".into())
+                    );
+                    self.central.connect(&peripheral);
+                }
             }
             CentralEvent::ServicesDiscovered {
                 peripheral,
@@ -384,7 +400,9 @@ impl ConnectionManager {
                         }
                     }
 
-                    return Ok(Some(Event::Connected(peripheral, characteristics)));
+                    let _ = self
+                        .client_tx
+                        .send(Event::Connected(peripheral, characteristics));
                 }
                 Err(err) => error!(
                     "Couldn't discover characteristics of {}: {}",
@@ -404,7 +422,9 @@ impl ConnectionManager {
                         peripheral.id(),
                         value
                     );
-                    return Ok(Some(Event::Value(peripheral, characteristic, value)));
+                    let _ = self
+                        .client_tx
+                        .send(Event::Value(peripheral, characteristic, value));
                 }
             }
             CentralEvent::WriteCharacteristicResult {
@@ -412,38 +432,46 @@ impl ConnectionManager {
                 characteristic,
                 result,
             } => {
-                return Ok(Some(Event::WriteRes(
+                let _ = self.client_tx.send(Event::WriteRes(
                     peripheral,
                     characteristic,
                     result.is_ok(),
-                )));
+                ));
             }
             _ => {}
         }
 
-        Ok(None)
+        Ok(())
     }
 }
 
-struct Backend {
+struct ConnectionManager {
     central: Option<CentralManager>,
     thread: Option<std::thread::JoinHandle<Result<()>>>,
-    tx: broadcast::Sender<Event>,
+    client_tx: broadcast::Sender<Event>,
+    manager_tx: mpsc::UnboundedSender<InnerMsg>,
+    inner_handle: AbortHandle,
 }
 
-impl Backend {
+impl ConnectionManager {
     fn new() -> Self {
-        let (tx, _) = broadcast::channel(CHANNEL_CAPACITY);
+        let (manager_tx, manager_rx) = mpsc::unbounded_channel();
+        let (client_tx, _) = broadcast::channel(CHANNEL_CAPACITY);
         let (central, central_rx) = CentralManager::new();
-        let manager = ConnectionManager::new();
+
+        let mut inner = Inner::new(central.clone(), client_tx.clone(), manager_rx);
+        let (inner, inner_handle) = abortable(async move {
+            if let Err(e) = inner.run().await {
+                error!("Error in connection manager: {}", e);
+            }
+        });
+        tokio::spawn(inner);
 
         // Run the thread to convert sync to async.
-        let client_tx = tx.clone();
+        let tx = manager_tx.clone();
         let thread = std::thread::spawn(move || {
             while let Ok(event) = central_rx.recv() {
-                if let Some(event) = manager.handle_event(event)? {
-                    let _ = client_tx.send(event);
-                }
+                let _ = tx.send(InnerMsg::Event(event));
             }
             Ok(())
         });
@@ -451,7 +479,9 @@ impl Backend {
         Self {
             central: Some(central),
             thread: Some(thread),
-            tx,
+            client_tx,
+            manager_tx,
+            inner_handle,
         }
     }
 
@@ -459,14 +489,25 @@ impl Backend {
         self.central.as_ref().unwrap()
     }
 
+    fn connect(&self, p: &Peripheral) {
+        let _ = self.manager_tx.send(InnerMsg::Connect(p.clone()));
+    }
+
+    fn disconnect(&self, p: &Peripheral) {
+        let _ = self.manager_tx.send(InnerMsg::Disconnect(p.clone()));
+    }
+
     fn subscribe(&self) -> broadcast::Receiver<Event> {
-        self.tx.subscribe()
+        self.client_tx.subscribe()
     }
 }
 
-impl Drop for Backend {
+impl Drop for ConnectionManager {
     fn drop(&mut self) {
-        // Drop central to stop receiving events
+        // Abort inner thread.
+        self.inner_handle.abort();
+
+        // Drop central to stop receiving events.
         self.central.take();
 
         if let Some(thread) = self.thread.take() {
