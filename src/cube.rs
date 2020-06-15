@@ -103,7 +103,51 @@ macro_rules! fetch_if_none {
     }};
 }
 
-/// The toio cube.
+/// The cube.
+///
+/// Provides API to control the cube. The API has two types:
+///
+/// * High-level API
+/// * Low-level API
+///
+/// The high-level API provides the basic feature to control the cube such as
+/// moving the cube, turning on/off the light, playing the sound and getting
+/// the current state of the cube.
+///
+/// The low-level API provides the API to send/receive all the raw protocol messages
+/// of the toio cube, which allows more fine-grained control and configuration.
+///
+/// This is the example of the high-level API:
+///
+/// ```no_run
+/// use std::time::Duration;
+/// use toio::Cube;
+/// use tokio::time::delay_for;
+///
+/// #[tokio::main]
+/// async fn main() {
+///     // Search for the nearest cube.
+///     let mut cube = Cube::search().nearest().await.unwrap();
+///
+///     // Connect.
+///     cube.connect().await.unwrap();
+///
+///     // Print status.
+///     println!("version   : {}", cube.version().await.unwrap());
+///     println!("battery   : {}%", cube.battery().await.unwrap());
+///     println!("button    : {}", cube.button().await.unwrap());
+///
+///     // Move forward.
+///     cube.go(10, 10, None).await.unwrap();
+///
+///     delay_for(Duration::from_secs(3)).await;
+///
+///     // Spin for 2 seconds.
+///     cube.go(100, 5, Some(Duration::from_secs(2))).await.unwrap();
+///
+///     delay_for(Duration::from_secs(3)).await;
+/// }
+/// ```
 pub struct Cube {
     dev: ble::Peripheral,
     status: Arc<Mutex<Status>>,
@@ -121,7 +165,35 @@ impl Cube {
         }
     }
 
-    /// Get the searcher.
+    /// Returns [`Searcher`][] instance to search for cubes.
+    ///
+    /// To find the nearest cube,
+    ///
+    /// ```no_run
+    /// use toio::Cube;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let mut cube = Cube::search().nearest().await.unwrap();
+    ///
+    ///     cube.connect().await.unwrap();
+    /// }
+    /// ```
+    ///
+    /// To find all cubes,
+    ///
+    /// ```no_run
+    /// use toio::Cube;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let mut cubes = Cube::search().all().await.unwrap();
+    ///
+    ///     for mut cube in cubes {
+    ///         cube.connect().await.unwrap();
+    ///     }
+    /// }
+    /// ```
     pub fn search() -> Searcher {
         Searcher::new()
     }
@@ -136,35 +208,72 @@ impl Cube {
         })
     }
 
-    /// Get the battery status.
+    /// Gets the battery status.
+    ///
+    /// Returns the percentage of the remaining battery.
     pub async fn battery(&mut self) -> Result<usize> {
         fetch_if_none!(self, battery, Battery, {
             self.dev.read(&UUID_BATTERY).await?;
         })
     }
 
-    /// Get the collision status.
+    /// Gets the collision status.
+    ///
+    /// Returns `true` if the cube is in collision.
     pub async fn collision(&mut self) -> Result<bool> {
         fetch_if_none!(self, collision, Collision, {
             self.dev.read(&UUID_MOTION).await?;
         })
     }
 
-    /// Get the slope status.
+    /// Gets the slope status.
+    ///
+    /// Returns `true` if the cube slopes.
     pub async fn slope(&mut self) -> Result<bool> {
         fetch_if_none!(self, slope, Slope, {
             self.dev.read(&UUID_MOTION).await?;
         })
     }
 
-    /// Get the button status.
+    /// Gets the button status.
+    ///
+    /// Returns `true` if the button is pressed.
     pub async fn button(&mut self) -> Result<bool> {
         fetch_if_none!(self, button, Button, {
             self.dev.read(&UUID_BUTTON).await?;
         })
     }
 
-    /// Move the cube.
+    /// Moves the cube.
+    ///
+    /// `left` and `right` are the rotation speed of each wheel.
+    /// The value must be in the range from -100 to 100.
+    /// The negative number rotates backward, while the positive rotates backward.
+    /// If specified, rotates for the given duration.
+    /// The duration must be in the range from 1 to 2550 milliseconds.
+    ///
+    /// ```no_run
+    /// use std::time::Duration;
+    /// use toio::Cube;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let mut cube = Cube::search().nearest().await.unwrap();
+    ///     cube.connect().await.unwrap();
+    ///
+    ///     // Move forward.
+    ///     cube.go(10, 10, None).await.unwrap();
+    ///
+    ///     // Move backward.
+    ///     cube.go(-10, -10, None).await.unwrap();
+    ///
+    ///     // Spin counterclockwise.
+    ///     cube.go(5, 50, None).await.unwrap();
+    ///
+    ///     // Spin clockwise for 1 second.
+    ///     cube.go(50, 5, Some(Duration::from_secs(1))).await.unwrap();
+    /// }
+    /// ```
     pub async fn go(
         &mut self,
         left: isize,
@@ -172,7 +281,7 @@ impl Cube {
         duration: Option<Duration>,
     ) -> Result<()> {
         if left < -100 || left > 100 || right < -100 || right > 100 {
-            return Err(anyhow!("Motor speed must be between -100 and 100"));
+            return Err(anyhow!("Wheel speed must be between -100 and 100"));
         }
         let adjust = |v: isize| {
             (
@@ -190,7 +299,7 @@ impl Cube {
         let motor = if let Some(d) = duration {
             let d = d.as_millis() / 10;
             if d > 255 {
-                return Err(anyhow!("Duration must be less than 256 milliseconds"));
+                return Err(anyhow!("Duration must be less than 2550 milliseconds"));
             }
             let d = d as u8;
 
@@ -219,13 +328,47 @@ impl Cube {
         Ok(())
     }
 
-    /// Stop the cube.
+    /// Stops the cube.
+    ///
+    /// Both wheels stop rotating.
+    ///
+    /// ```no_run
+    /// use std::time::Duration;
+    /// use tokio::time::delay_for;
+    /// use toio::Cube;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let mut cube = Cube::search().nearest().await.unwrap();
+    ///     cube.connect().await.unwrap();
+    ///
+    ///     // Move forward.
+    ///     cube.go(10, 10, None).await.unwrap();
+    ///
+    ///     delay_for(Duration::from_secs(3)).await;
+    ///
+    ///     // Stop the cube.
+    ///     cube.stop().await.unwrap();
+    /// }
+    /// ```
     pub async fn stop(&mut self) -> Result<()> {
         self.go(0, 0, None).await?;
         Ok(())
     }
 
-    /// Play sound preset.
+    /// Plays sound preset.
+    ///
+    /// ```no_run
+    /// use toio::{Cube, SoundPresetId};
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let mut cube = toio::Cube::search().nearest().await.unwrap();
+    ///     cube.connect().await.unwrap();
+    ///
+    ///     cube.play_preset(SoundPresetId::Enter).await.unwrap();
+    /// }
+    /// ```
     pub async fn play_preset(&mut self, id: SoundPresetId) -> Result<()> {
         self.dev
             .write_msg(Sound::Preset(SoundPreset::new(id, 255)), true)
@@ -233,7 +376,33 @@ impl Cube {
         Ok(())
     }
 
-    /// Play sound.
+    /// Plays sound.
+    ///
+    /// Play sound in accordance with the list of sound operations.
+    /// The number of sound operations must be less than 60.
+    /// The duration for each sound must be in the range from 1 to 2550 milliseconds.
+    /// The repeat count must be less than 256.
+    ///
+    /// ```no_run
+    /// use std::time::Duration;
+    /// use toio::{Cube, SoundOp, Note};
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let mut cube = toio::Cube::search().nearest().await.unwrap();
+    ///     cube.connect().await.unwrap();
+    ///
+    ///     cube.play(
+    ///         // Repeats three times.
+    ///         3,
+    ///         // Plays two sound for 500 milliseconds for each.
+    ///         vec![
+    ///             SoundOp::new(Note::C5, Duration::from_millis(500)),
+    ///             SoundOp::new(Note::A6, Duration::from_millis(500)),
+    ///         ],
+    ///     ).await.unwrap();
+    /// }
+    /// ```
     pub async fn play(&mut self, repeat: usize, ops: Vec<SoundOp>) -> Result<()> {
         if ops.len() == 0 || ops.len() >= 60 {
             return Err(anyhow!("The number of operations must be from 1 to 59"));
@@ -266,13 +435,60 @@ impl Cube {
         Ok(())
     }
 
-    /// Stop playing sound.
+    /// Stops playing sound.
+    ///
+    /// ```no_run
+    /// use std::time::Duration;
+    /// use tokio::time::delay_for;
+    /// use toio::{Cube, SoundOp, Note};
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let mut cube = toio::Cube::search().nearest().await.unwrap();
+    ///     cube.connect().await.unwrap();
+    ///
+    ///     // Starts playing sound.
+    ///     cube.play(1, vec![SoundOp::new(Note::C5, Duration::from_secs(2))]).await.unwrap();
+    ///
+    ///     delay_for(Duration::from_secs(1)).await;
+    ///
+    ///     // Stops the sound.
+    ///     cube.stop_sound().await.unwrap();
+    /// }
+    /// ```
     pub async fn stop_sound(&mut self) -> Result<()> {
         self.dev.write_msg(proto::Sound::Stop, true).await?;
         Ok(())
     }
 
-    /// Change the light status.
+    /// Turns on the light as programmed.
+    ///
+    /// The light color is set by RGB value, each of which must be in range 0 to 255.
+    /// The number of light operations must be less than 30.
+    /// The repeat count must be less than 256.
+    /// The duration of each light operation must be less than 2550 milliseconds.
+    ///
+    /// ```no_run
+    /// use std::time::Duration;
+    /// use toio::{Cube, LightOp};
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let mut cube = toio::Cube::search().nearest().await.unwrap();
+    ///     cube.connect().await.unwrap();
+    ///
+    ///     cube.light(
+    ///         // Repeats 10 times.
+    ///         10,
+    ///         // Turns on the red, green, blue light for 100 milliseconds for each.
+    ///         vec![
+    ///             LightOp::new(255, 0, 0, Some(Duration::from_millis(100))),
+    ///             LightOp::new(0, 255, 0, Some(Duration::from_millis(100))),
+    ///             LightOp::new(0, 0, 255, Some(Duration::from_millis(100))),
+    ///         ],
+    ///     ).await.unwrap();
+    /// }
+    /// ```
     pub async fn light(&mut self, repeat: usize, ops: Vec<LightOp>) -> Result<()> {
         if ops.len() == 0 || ops.len() >= 30 {
             return Err(anyhow!("The number of operations must be from 1 to 29"));
@@ -309,7 +525,23 @@ impl Cube {
         Ok(())
     }
 
-    /// Turn on the light.
+    /// Turns on the light.
+    ///
+    /// The light color is set by RGB value, each of which must be in range 0 to 255.
+    /// The duration must be less than 2550 milliseconds.
+    ///
+    /// ```no_run
+    /// use toio::Cube;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let mut cube = toio::Cube::search().nearest().await.unwrap();
+    ///     cube.connect().await.unwrap();
+    ///
+    ///     // Turns on the green light.
+    ///     cube.light_on(0, 255, 0, None).await.unwrap();
+    /// }
+    /// ```
     pub async fn light_on(
         &mut self,
         red: u8,
@@ -329,7 +561,27 @@ impl Cube {
         Ok(())
     }
 
-    /// Turn off the light.
+    /// Turns off the light.
+    ///
+    /// ```no_run
+    /// use std::time::Duration;
+    /// use tokio::time::delay_for;
+    /// use toio::Cube;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let mut cube = toio::Cube::search().nearest().await.unwrap();
+    ///     cube.connect().await.unwrap();
+    ///
+    ///     // Turns on the light.
+    ///     cube.light_on(255, 255, 255, None).await.unwrap();
+    ///
+    ///     delay_for(Duration::from_secs(3)).await;
+    ///
+    ///     // Turns off the light.
+    ///     cube.light_off().await.unwrap();
+    /// }
+    /// ```
     pub async fn light_off(&mut self) -> Result<()> {
         self.dev
             .write_msg(Light::Off(LightOff::new()), true)
@@ -337,7 +589,21 @@ impl Cube {
         Ok(())
     }
 
-    /// Connect the cube.
+    /// Connects to the cube.
+    ///
+    /// This must be called first before operating on the cube.
+    ///
+    /// ```no_run
+    /// use toio::Cube;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let mut cube = Cube::search().nearest().await.unwrap();
+    ///
+    ///     // Connects to the cube.
+    ///     cube.connect().await.unwrap();
+    /// }
+    /// ```
     pub async fn connect(&mut self) -> Result<()> {
         let status = self.status.clone();
         let mut rx = self.events().await?;
@@ -354,7 +620,27 @@ impl Cube {
         Ok(())
     }
 
-    /// Subscribe to events.
+    /// Subscribes to events.
+    ///
+    /// ```no_run
+    /// use futures::prelude::*;
+    /// use toio::{Cube, Event};
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let mut cube = Cube::search().nearest().await.unwrap();
+    ///     cube.connect().await.unwrap();
+    ///
+    ///     let mut events = cube.events().await.unwrap();
+    ///     while let Some(event) = events.next().await {
+    ///         match event {
+    ///             Event::Collision(collided) => println!("collided: {}", collided),
+    ///             Event::Battery(remain) => println!("battery: {}%", remain),
+    ///             _ => {},
+    ///         }
+    ///     }
+    /// }
+    /// ```
     pub async fn events(&mut self) -> Result<EventStream> {
         let rx = self.dev.subscribe_msg()?;
 
@@ -372,19 +658,102 @@ impl Cube {
             .boxed())
     }
 
-    /// Write a raw message to the device.
+    /// Writes a raw message to the device.
+    ///
+    /// This is the low-level API that allows to directly write
+    /// the protocol data structures defined in [`proto`][] to the cube device.
+    /// Some data triggers events which can be retrieved by [`Cube::raw_msgs`][] or [`Cube::events`][].
+    ///
+    /// ```no_run
+    /// use toio::{Cube, proto::*};
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let mut cube = Cube::search().nearest().await.unwrap();
+    ///     cube.connect().await.unwrap();
+    ///
+    ///     // Move forward.
+    ///     cube.write_msg(
+    ///         Message::Motor(Motor::Simple(MotorSimple::new(
+    ///             MotorId::Left,
+    ///             MotorDir::Forward,
+    ///             30,
+    ///             MotorId::Right,
+    ///             MotorDir::Forward,
+    ///             30,
+    ///         ))),
+    ///         false,
+    ///     ).await.unwrap();
+    /// }
+    /// ```
     pub async fn write_msg(&mut self, msg: Message, with_resp: bool) -> Result<()> {
         self.dev.write_msg(msg, with_resp).await?;
         Ok(())
     }
 
-    /// Send a read request to the device.
+    /// Sends a read request to the device.
+    ///
+    /// This is the low-level API to request to read values in the device.
+    /// This usually triggers events which can be retrieved by [`Cube::raw_msgs`][] or [`Cube::events`][].
+    ///
+    /// ```no_run
+    /// use futures::prelude::*;
+    /// use toio::{Cube, proto::*};
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let mut cube = Cube::search().nearest().await.unwrap();
+    ///     cube.connect().await.unwrap();
+    ///
+    ///     // Subscribe to raw messages.
+    ///     let mut msgs = cube.raw_msgs().await.unwrap();
+    ///
+    ///     // Send a read request for motor state to the cube.
+    ///     cube.read_msg(&UUID_MOTION).await.unwrap();
+    ///
+    ///     // Receive the motor state, which is sent as response to the read request.
+    ///     while let Some(msg) = msgs.next().await {
+    ///         match msg {
+    ///             Message::Motion(Motion::Detect(d)) => {
+    ///                 println!("{:?}", d);
+    ///                 break;
+    ///             }
+    ///             _ => {}
+    ///         }
+    ///     }
+    /// }
+    /// ```
     pub async fn read_msg(&mut self, uuid: &Uuid) -> Result<()> {
         self.dev.read(uuid).await?;
         Ok(())
     }
 
     /// Subscribe to raw messages.
+    ///
+    /// This is the low-level API to subscribe to raw protocol messages from the cube device.
+    ///
+    /// ```no_run
+    /// use futures::prelude::*;
+    /// use toio::{Cube, proto::*};
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let mut cube = Cube::search().nearest().await.unwrap();
+    ///     cube.connect().await.unwrap();
+    ///
+    ///     // Subscribe to raw messages.
+    ///     let mut msgs = cube.raw_msgs().await.unwrap();
+    ///
+    ///     // Receive raw messages.
+    ///     while let Some(msg) = msgs.next().await {
+    ///         match msg {
+    ///             Message::Motion(Motion::Detect(d)) => {
+    ///             }
+    ///             _ => {}
+    ///         }
+    ///     }
+    /// }
+    /// ```
     pub async fn raw_msgs(&mut self) -> Result<MessageStream> {
         Ok(self
             .dev

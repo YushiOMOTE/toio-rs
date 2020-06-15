@@ -4,7 +4,7 @@ use futures::{prelude::*, stream::BoxStream};
 use std::convert::{TryFrom, TryInto};
 use std::fmt::{self, Display};
 
-/// Helper to construct [Uuid][] from a string at compile time.
+/// Helper to construct [`ble::Uuid`][] from a string at compile time.
 #[macro_export]
 macro_rules! uuid {
     ($hex:literal) => {
