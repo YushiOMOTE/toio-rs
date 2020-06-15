@@ -3,6 +3,13 @@ name = "toio"
 version = "0.1.0"
 authors = ["Yushi OMOTE <yushiomote@gmail.com>"]
 edition = "2018"
+keywords = ["toio", "driver"]
+description = "toio driver in Rust"
+homepage = "https://github.com/yushiomote/toio-rs"
+repository = "https://github.com/yushiomote/toio-rs"
+documentation = "https://docs.rs/toio"
+license = "MIT"
+readme = "README.md"
 
 [dependencies]
 log = "0.4"
