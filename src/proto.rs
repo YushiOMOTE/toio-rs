@@ -34,7 +34,7 @@ pub const UUID_BATTERY: Uuid = uuid!("10b20108 5b3b 4571 9508 cf3efcd7bbae");
 pub const UUID_CONFIG: Uuid = uuid!("10b201ff 5b3b 4571 9508 cf3efcd7bbae");
 
 /// Sound note.
-#[derive(Serialize_repr, Deserialize_repr, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize_repr, Deserialize_repr, Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Note {
     /// C 0

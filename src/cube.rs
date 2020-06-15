@@ -13,7 +13,7 @@ use tokio::{sync::Mutex, time::timeout};
 
 use crate::{
     ble::{self, PeripheralOps, PeripheralOpsExt},
-    proto::*,
+    proto::{self, *},
     Searcher,
 };
 
@@ -246,8 +246,53 @@ impl Cube {
     }
 
     /// Play sound.
-    pub async fn play(&mut self, _sound: Sound) -> Result<()> {
-        unimplemented!()
+    pub async fn play(&mut self, sound: Sound) -> Result<()> {
+        match sound {
+            Sound::Preset(id) => {
+                self.dev
+                    .write_msg(proto::Sound::Preset(SoundPreset::new(id, 255)), true)
+                    .await
+                    .unwrap();
+            }
+            Sound::Ops(sound) => {
+                if sound.ops.len() == 0 || sound.ops.len() >= 60 {
+                    return Err(anyhow!("The number of operations must be from 1 to 59"));
+                }
+                if sound.repeat > 255 {
+                    return Err(anyhow!("The repeat count must be less than 256"));
+                }
+
+                let ops: Result<Vec<_>> = sound
+                    .ops
+                    .iter()
+                    .map(|op| {
+                        let d = op.duration.as_millis() / 10;
+
+                        if d > 255 {
+                            return Err(anyhow!(
+                                "The duration must be less than 2550 milliseconds"
+                            ));
+                        }
+
+                        Ok(proto::SoundOp::new(d as u8, op.note, 255))
+                    })
+                    .collect();
+                let ops = ops?;
+
+                self.dev
+                    .write_msg(
+                        proto::Sound::Play(SoundPlay::new(
+                            sound.repeat as u8,
+                            ops.len() as u8,
+                            ops,
+                        )),
+                        true,
+                    )
+                    .await?;
+            }
+        }
+
+        Ok(())
     }
 
     /// Stop playing sound.
@@ -257,7 +302,7 @@ impl Cube {
 
     /// Change the light status.
     pub async fn light(&mut self, light: LightOps) -> Result<()> {
-        if light.ops.len() == 0 || light.ops.len() > 30 {
+        if light.ops.len() == 0 || light.ops.len() >= 30 {
             return Err(anyhow!("The number of operations must be from 1 to 29"));
         }
         if light.repeat > 255 {
