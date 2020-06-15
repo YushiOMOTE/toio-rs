@@ -4,6 +4,7 @@ use futures::{prelude::*, stream::BoxStream};
 use std::convert::{TryFrom, TryInto};
 use std::fmt::{self, Display};
 
+/// Helper to construct [Uuid][] from a string at compile time.
 #[macro_export]
 macro_rules! uuid {
     ($hex:literal) => {
@@ -63,6 +64,7 @@ pub trait PeripheralOps {
     fn subscribe(&mut self) -> Result<ValueStream>;
 }
 
+/// The interface to help reading/writing protocol messages.
 #[async_trait::async_trait]
 pub trait PeripheralOpsExt: PeripheralOps {
     /// Write protocol message.

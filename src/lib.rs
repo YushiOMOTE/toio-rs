@@ -1,5 +1,8 @@
+/// Bluetooth API.
 #[macro_use]
 pub mod ble;
+
+/// Protocol data structures.
 pub mod proto;
 
 mod cube;

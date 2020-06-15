@@ -4,11 +4,13 @@ use crate::{
 };
 use anyhow::{anyhow, Context, Result};
 
+/// Searcher to search cubes.
 pub struct Searcher {
     searcher: ble::Searcher,
 }
 
 impl Searcher {
+    /// Create a new searcher instance.
     pub fn new() -> Self {
         Self {
             searcher: ble::searcher(),
