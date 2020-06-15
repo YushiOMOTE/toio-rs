@@ -2,6 +2,11 @@
 
 [toio](https://toio.io/) driver in Rust
 
+[![Latest version](https://img.shields.io/crates/v/toio.svg)](https://crates.io/crates/toio)
+[![Documentation](https://docs.rs/toio/badge.svg)](https://docs.rs/toio)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Actions Status](https://github.com/YushiOMOTE/toio-rs/workflows/Rust/badge.svg)](https://github.com/YushiOMOTE/toio-rs/actions)
+
 ![demo](https://raw.github.com/wiki/YushiOMOTE/toio-rs/demo.gif)
 
 ```rust
