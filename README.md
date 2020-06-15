@@ -7,6 +7,8 @@
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Actions Status](https://github.com/YushiOMOTE/toio-rs/workflows/Rust/badge.svg)](https://github.com/YushiOMOTE/toio-rs/actions)
 
+![demo](https://raw.github.com/wiki/YushiOMOTE/toio-rs/demo.gif)
+
 * Supports all the messages defined in [the API reference document](https://toio.github.io/toio.js/).
 * Supports async/await.
 * Provides the similar capability as [JavaScript version](https://github.com/toio/toio.js/).
@@ -16,8 +18,6 @@
     * macOS
     * Windows 10 (TODO)
     * Linux (TODO)
-
-![demo](https://raw.github.com/wiki/YushiOMOTE/toio-rs/demo.gif)
 
 ```rust
 use std::time::Duration;
