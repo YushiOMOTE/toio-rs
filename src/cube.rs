@@ -110,12 +110,12 @@ macro_rules! fetch_if_none {
 /// * High-level API
 /// * Low-level API
 ///
-/// The high-level API provides the basic feature to control the cube such as
-/// moving the cube, turning on/off the light, playing the sound and getting
-/// the current state of the cube.
+/// The high-level API provides easy-to-use basic feature to control the cube such as
+/// moving, turning on/off the light, and playing sound.
 ///
-/// The low-level API provides the API to send/receive all the raw protocol messages
-/// of the toio cube, which allows more fine-grained control and configuration.
+/// The low-level API provides the API for more fine-grained control and configuration.
+/// The API allows to send/receive all the raw protocol messages,
+/// which allows to use all the features of toio cube defined in the specification.
 ///
 /// This is the example of the high-level API:
 ///
@@ -248,9 +248,10 @@ impl Cube {
     ///
     /// `left` and `right` are the rotation speed of each wheel.
     /// The value must be in the range from -100 to 100.
-    /// The negative number rotates backward, while the positive rotates backward.
-    /// If specified, rotates for the given duration.
-    /// The duration must be in the range from 1 to 2550 milliseconds.
+    /// The negative number rotates backward, while the positive rotates forward.
+    /// If specified, the wheels rotate for the given duration. If the duration is `None`,
+    /// wheels rotate forever.
+    /// The duration must be in the range from 1 to 2559 milliseconds.
     ///
     /// ```no_run
     /// use std::time::Duration;
@@ -299,7 +300,7 @@ impl Cube {
         let motor = if let Some(d) = duration {
             let d = d.as_millis() / 10;
             if d > 255 {
-                return Err(anyhow!("Duration must be less than 2550 milliseconds"));
+                return Err(anyhow!("Duration must be less than 2560 milliseconds"));
             }
             let d = d as u8;
 
@@ -380,7 +381,7 @@ impl Cube {
     ///
     /// Play sound in accordance with the list of sound operations.
     /// The number of sound operations must be less than 60.
-    /// The duration for each sound must be in the range from 1 to 2550 milliseconds.
+    /// The duration for each sound must be in the range from 1 to 2559 milliseconds.
     /// The repeat count must be less than 256.
     ///
     /// ```no_run
@@ -417,7 +418,7 @@ impl Cube {
                 let d = op.duration.as_millis() / 10;
 
                 if d > 255 {
-                    return Err(anyhow!("The duration must be less than 2550 milliseconds"));
+                    return Err(anyhow!("The duration must be less than 2560 milliseconds"));
                 }
 
                 Ok(proto::SoundOp::new(d as u8, op.note, 255))
@@ -466,7 +467,7 @@ impl Cube {
     /// The light color is set by RGB value, each of which must be in range 0 to 255.
     /// The number of light operations must be less than 30.
     /// The repeat count must be less than 256.
-    /// The duration of each light operation must be less than 2550 milliseconds.
+    /// The duration of each light operation must be less than 2560 milliseconds.
     ///
     /// ```no_run
     /// use std::time::Duration;
@@ -507,7 +508,7 @@ impl Cube {
                     .unwrap_or(0);
 
                 if d > 255 {
-                    return Err(anyhow!("The duration must be less than 2550 milliseconds"));
+                    return Err(anyhow!("The duration must be less than 2560 milliseconds"));
                 }
 
                 Ok(LightOn::new(d as u8, op.red, op.green, op.blue))
@@ -528,7 +529,7 @@ impl Cube {
     /// Turns on the light.
     ///
     /// The light color is set by RGB value, each of which must be in range 0 to 255.
-    /// The duration must be less than 2550 milliseconds.
+    /// The duration must be less than 2560 milliseconds.
     ///
     /// ```no_run
     /// use toio::Cube;
