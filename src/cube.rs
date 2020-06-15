@@ -297,7 +297,8 @@ impl Cube {
 
     /// Stop playing sound.
     pub async fn stop_sound(&mut self) -> Result<()> {
-        unimplemented!()
+        self.dev.write_msg(proto::Sound::Stop, true).await?;
+        Ok(())
     }
 
     /// Change the light status.

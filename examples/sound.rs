@@ -32,6 +32,16 @@ async fn main() {
 
     delay_for(Duration::from_secs(4)).await;
 
-    // Stop
-    cube.stop().await.unwrap();
+    cube.play(Sound::Ops(SoundOps::new(
+        vec![SoundOp::new(Note::C5, Duration::from_millis(2000))],
+        1,
+    )))
+    .await
+    .unwrap();
+
+    delay_for(Duration::from_secs(1)).await;
+
+    cube.stop_sound().await.unwrap();
+
+    delay_for(Duration::from_secs(1)).await;
 }
