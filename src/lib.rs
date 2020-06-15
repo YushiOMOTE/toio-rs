@@ -1,6 +1,6 @@
 //! [toio](https://toio.io/) driver in Rust.
 //!
-//! Supports all the messages defined in [the API reference document](https://toio.github.io/toio.js/).
+//! Supports all the messages defined in [the technical specification](https://toio.github.io/toio-spec/).
 //! Provides async/await API.
 //! Provides the similar API as [JavaScript version](https://github.com/toio/toio.js/).
 //! Also provides the low-level API, which allows fine-grained control and configuration.
