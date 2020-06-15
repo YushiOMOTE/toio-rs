@@ -32,15 +32,6 @@ pub struct LightOp {
     pub duration: Option<Duration>,
 }
 
-/// Light operations.
-#[derive(Serialize, Deserialize, Debug, Clone, new)]
-pub struct LightOps {
-    /// The list of light operations.
-    pub ops: Vec<LightOp>,
-    /// The repeat count.
-    pub repeat: usize,
-}
-
 /// A sound operation.
 #[derive(Serialize, Deserialize, Debug, Clone, new)]
 pub struct SoundOp {
@@ -48,24 +39,6 @@ pub struct SoundOp {
     pub note: Note,
     /// Duration to play sound.
     pub duration: Duration,
-}
-
-/// Sound operations.
-#[derive(Serialize, Deserialize, Debug, Clone, new)]
-pub struct SoundOps {
-    /// The list of sound operations.
-    pub ops: Vec<SoundOp>,
-    /// The repeat count.
-    pub repeat: usize,
-}
-
-/// Sound information to play.
-#[derive(Serialize, Deserialize, Debug, Clone, new)]
-pub enum Sound {
-    /// Sound preset.
-    Preset(SoundPresetId),
-    /// Sound operations.
-    Ops(SoundOps),
 }
 
 /// The event sent when the status is updated.
@@ -208,7 +181,7 @@ impl Cube {
         let (right_dir, right) = adjust(right);
 
         let motor = if let Some(d) = duration {
-            let d = d.as_millis();
+            let d = d.as_millis() / 10;
             if d > 255 {
                 return Err(anyhow!("Duration must be less than 256 milliseconds"));
             }
@@ -245,52 +218,43 @@ impl Cube {
         Ok(())
     }
 
+    /// Play sound preset.
+    pub async fn play_preset(&mut self, id: SoundPresetId) -> Result<()> {
+        self.dev
+            .write_msg(Sound::Preset(SoundPreset::new(id, 255)), true)
+            .await?;
+        Ok(())
+    }
+
     /// Play sound.
-    pub async fn play(&mut self, sound: Sound) -> Result<()> {
-        match sound {
-            Sound::Preset(id) => {
-                self.dev
-                    .write_msg(proto::Sound::Preset(SoundPreset::new(id, 255)), true)
-                    .await
-                    .unwrap();
-            }
-            Sound::Ops(sound) => {
-                if sound.ops.len() == 0 || sound.ops.len() >= 60 {
-                    return Err(anyhow!("The number of operations must be from 1 to 59"));
-                }
-                if sound.repeat > 255 {
-                    return Err(anyhow!("The repeat count must be less than 256"));
-                }
-
-                let ops: Result<Vec<_>> = sound
-                    .ops
-                    .iter()
-                    .map(|op| {
-                        let d = op.duration.as_millis() / 10;
-
-                        if d > 255 {
-                            return Err(anyhow!(
-                                "The duration must be less than 2550 milliseconds"
-                            ));
-                        }
-
-                        Ok(proto::SoundOp::new(d as u8, op.note, 255))
-                    })
-                    .collect();
-                let ops = ops?;
-
-                self.dev
-                    .write_msg(
-                        proto::Sound::Play(SoundPlay::new(
-                            sound.repeat as u8,
-                            ops.len() as u8,
-                            ops,
-                        )),
-                        true,
-                    )
-                    .await?;
-            }
+    pub async fn play(&mut self, repeat: usize, ops: Vec<SoundOp>) -> Result<()> {
+        if ops.len() == 0 || ops.len() >= 60 {
+            return Err(anyhow!("The number of operations must be from 1 to 59"));
         }
+        if repeat > 255 {
+            return Err(anyhow!("The repeat count must be less than 256"));
+        }
+
+        let ops: Result<Vec<_>> = ops
+            .iter()
+            .map(|op| {
+                let d = op.duration.as_millis() / 10;
+
+                if d > 255 {
+                    return Err(anyhow!("The duration must be less than 2550 milliseconds"));
+                }
+
+                Ok(proto::SoundOp::new(d as u8, op.note, 255))
+            })
+            .collect();
+        let ops = ops?;
+
+        self.dev
+            .write_msg(
+                Sound::Play(SoundPlay::new(repeat as u8, ops.len() as u8, ops)),
+                true,
+            )
+            .await?;
 
         Ok(())
     }
@@ -302,16 +266,15 @@ impl Cube {
     }
 
     /// Change the light status.
-    pub async fn light(&mut self, light: LightOps) -> Result<()> {
-        if light.ops.len() == 0 || light.ops.len() >= 30 {
+    pub async fn light(&mut self, repeat: usize, ops: Vec<LightOp>) -> Result<()> {
+        if ops.len() == 0 || ops.len() >= 30 {
             return Err(anyhow!("The number of operations must be from 1 to 29"));
         }
-        if light.repeat > 255 {
+        if repeat > 255 {
             return Err(anyhow!("The repeat count must be less than 256"));
         }
 
-        let ops: Result<Vec<_>> = light
-            .ops
+        let ops: Result<Vec<_>> = ops
             .iter()
             .map(|op| {
                 let d = op
@@ -327,14 +290,11 @@ impl Cube {
                 Ok(LightOn::new(d as u8, op.red, op.green, op.blue))
             })
             .collect();
+        let ops = ops?;
 
         self.dev
             .write_msg(
-                Light::Ctrl(LightCtrl::new(
-                    light.repeat as u8,
-                    light.ops.len() as u8,
-                    ops?,
-                )),
+                Light::Ctrl(LightCtrl::new(repeat as u8, ops.len() as u8, ops)),
                 true,
             )
             .await?;
@@ -343,16 +303,18 @@ impl Cube {
     }
 
     /// Turn on the light.
-    pub async fn light_on(&mut self, light: LightOp) -> Result<()> {
-        let d = light
-            .duration
-            .as_ref()
-            .map(|d| d.as_millis() / 10)
-            .unwrap_or(0);
+    pub async fn light_on(
+        &mut self,
+        red: u8,
+        green: u8,
+        blue: u8,
+        duration: Option<Duration>,
+    ) -> Result<()> {
+        let duration = duration.as_ref().map(|d| d.as_millis() / 10).unwrap_or(0);
 
         self.dev
             .write_msg(
-                Light::On(LightOn::new(d as u8, light.red, light.green, light.blue)),
+                Light::On(LightOn::new(duration as u8, red, green, blue)),
                 true,
             )
             .await?;

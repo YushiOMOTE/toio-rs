@@ -11,7 +11,5 @@ mod encode;
 mod searcher;
 
 pub use ble::Uuid;
-pub use cube::{
-    Cube, Event, EventStream, LightOp, LightOps, Note, Sound, SoundOp, SoundOps, SoundPresetId,
-};
+pub use cube::{Cube, Event, EventStream, LightOp, Note, SoundOp, SoundPresetId};
 pub use searcher::*;
