@@ -385,7 +385,7 @@ impl Cube {
     }
 
     /// Subscribe to raw messages.
-    pub async fn raw_messages(&mut self) -> Result<MessageStream> {
+    pub async fn raw_msgs(&mut self) -> Result<MessageStream> {
         Ok(self
             .dev
             .subscribe_msg()?

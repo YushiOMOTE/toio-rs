@@ -1,24 +1,26 @@
+use futures::prelude::*;
+use std::time::Duration;
 use toio::{
     ble::{self, PeripheralOps, PeripheralOpsExt},
     proto::*,
 };
-
-use futures::prelude::*;
-use std::time::Duration;
 use tokio::time::delay_for;
 
 #[tokio::main]
 async fn main() {
     env_logger::init();
 
+    // Search for a bluetooth device with the toio service UUID.
     let mut searcher = ble::searcher();
     let mut peripherals = searcher.search(&UUID_SERVICE).await.unwrap();
     let mut peripheral = peripherals.pop().unwrap();
 
+    // Connect to the device.
     peripheral.connect().await.unwrap();
 
     delay_for(Duration::from_secs(2)).await;
 
+    // Write a message to the device.
     peripheral
         .write_msg(
             Motor::Simple(MotorSimple::new(
@@ -36,12 +38,15 @@ async fn main() {
 
     delay_for(Duration::from_secs(2)).await;
 
-    let mut events = peripheral.subscribe_msg().unwrap();
+    // Subscribe to messages from the device.
+    let mut msgs = peripheral.subscribe_msg().unwrap();
 
+    // Send a read request for motor state to the device.
     peripheral.read(&UUID_MOTION).await.unwrap();
 
-    while let Some(event) = events.next().await {
-        match event.unwrap() {
+    // Receive messages.
+    while let Some(msg) = msgs.next().await {
+        match msg.unwrap() {
             Message::Motion(Motion::Detect(d)) => {
                 println!("{:?}", d);
                 break;
