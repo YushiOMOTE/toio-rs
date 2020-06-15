@@ -12,7 +12,7 @@ use std::time::Duration;
 use tokio::{sync::Mutex, time::timeout};
 
 use crate::{
-    ble::{self, PeripheralOps, PeripheralOpsExt},
+    ble::{self, PeripheralOps, PeripheralOpsExt, Uuid},
     proto::{self, *},
     Searcher,
 };
@@ -62,6 +62,9 @@ pub enum Event {
 
 /// The stream of events.
 pub type EventStream = BoxStream<'static, Event>;
+
+/// The stream of raw messages.
+pub type MessageStream = BoxStream<'static, Message>;
 
 #[derive(Default, Debug)]
 struct Status {
@@ -366,6 +369,27 @@ impl Cube {
                 }
             })
             .flatten()
+            .boxed())
+    }
+
+    /// Write a raw message to the device.
+    pub async fn write_msg(&mut self, msg: Message, with_resp: bool) -> Result<()> {
+        self.dev.write_msg(msg, with_resp).await?;
+        Ok(())
+    }
+
+    /// Send a read request to the device.
+    pub async fn read_msg(&mut self, uuid: &Uuid) -> Result<()> {
+        self.dev.read(uuid).await?;
+        Ok(())
+    }
+
+    /// Subscribe to raw messages.
+    pub async fn raw_messages(&mut self) -> Result<MessageStream> {
+        Ok(self
+            .dev
+            .subscribe_msg()?
+            .filter_map(|msg| async move { msg.ok() })
             .boxed())
     }
 }
