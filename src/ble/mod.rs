@@ -133,17 +133,21 @@ where
 
 impl<T> PeripheralOpsExt for T where T: PeripheralOps {}
 
-#[cfg(target_os = "macos")]
-mod macos;
-#[cfg(target_os = "macos")]
-pub use macos::searcher;
-
-#[cfg(target_os = "windows")]
-mod windows;
-#[cfg(target_os = "windows")]
-pub use windows::searcher;
-
 #[cfg(target_os = "linux")]
 mod linux;
-#[cfg(target_os = "linux")]
-pub use linux::searcher;
+#[cfg(target_os = "macos")]
+mod macos;
+#[cfg(target_os = "windows")]
+mod windows;
+
+/// Create a platform-specific searcher instance.
+pub fn searcher() -> Searcher {
+    #[cfg(target_os = "linux")]
+    use linux::searcher as s;
+    #[cfg(target_os = "macos")]
+    use macos::searcher as s;
+    #[cfg(target_os = "windows")]
+    use windows::searcher as s;
+
+    s()
+}

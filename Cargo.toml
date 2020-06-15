@@ -15,7 +15,6 @@ readme = "README.md"
 log = "0.4"
 chrono = "0.4"
 env_logger = "0.7"
-core_bluetooth = "0.1"
 anyhow = "1.0"
 futures = "0.3"
 derive-new = "0.5"
@@ -25,3 +24,6 @@ serde_repr = "0.1"
 tokio = { version = "0.2", features = ["full"] }
 hex-literal = "0.2"
 bytes = "0.5"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core_bluetooth = "0.1"
