@@ -297,13 +297,29 @@ impl Cube {
     }
 
     /// Turn on the light.
-    pub async fn light_on(&mut self) -> Result<()> {
-        unimplemented!()
+    pub async fn light_on(&mut self, light: LightOp) -> Result<()> {
+        let d = light
+            .duration
+            .as_ref()
+            .map(|d| d.as_millis() / 10)
+            .unwrap_or(0);
+
+        self.dev
+            .write_msg(
+                Light::On(LightOn::new(d as u8, light.red, light.green, light.blue)),
+                true,
+            )
+            .await?;
+
+        Ok(())
     }
 
     /// Turn off the light.
     pub async fn light_off(&mut self) -> Result<()> {
-        unimplemented!()
+        self.dev
+            .write_msg(Light::Off(LightOff::new()), true)
+            .await?;
+        Ok(())
     }
 
     /// Connect the cube.

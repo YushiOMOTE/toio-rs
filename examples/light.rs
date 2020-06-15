@@ -25,6 +25,16 @@ async fn main() {
 
     delay_for(Duration::from_secs(4)).await;
 
+    cube.light_on(LightOp::new(255, 255, 255, None))
+        .await
+        .unwrap();
+
+    delay_for(Duration::from_secs(2)).await;
+
+    cube.light_off().await.unwrap();
+
+    delay_for(Duration::from_secs(1)).await;
+
     // Stop
     cube.stop().await.unwrap();
 }
