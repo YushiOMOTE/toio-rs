@@ -403,7 +403,7 @@ msg!(
 );
 
 /// Posture of the cube.
-#[derive(Serialize_repr, Deserialize_repr, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize_repr, Deserialize_repr, Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Posture {
     /// The top side of the cube is up.
@@ -444,7 +444,7 @@ msg!(
 );
 
 /// The state of the button.
-#[derive(Serialize_repr, Deserialize_repr, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize_repr, Deserialize_repr, Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum ButtonState {
     /// The button is not pressed.
@@ -464,7 +464,7 @@ msg!(
 );
 
 /// The id of the motor.
-#[derive(Serialize_repr, Deserialize_repr, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize_repr, Deserialize_repr, Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum MotorId {
     /// The left motor.
@@ -474,7 +474,7 @@ pub enum MotorId {
 }
 
 /// The direction of the motor rotation.
-#[derive(Serialize_repr, Deserialize_repr, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize_repr, Deserialize_repr, Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum MotorDir {
     /// Rotate forward.
@@ -520,7 +520,7 @@ pub struct MotorTimed {
 }
 
 /// The type of the movement.
-#[derive(Serialize_repr, Deserialize_repr, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize_repr, Deserialize_repr, Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum MoveType {
     /// The cube goes to the target position, spinning accordingly.
@@ -532,7 +532,7 @@ pub enum MoveType {
 }
 
 /// The change of the speed.
-#[derive(Serialize_repr, Deserialize_repr, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize_repr, Deserialize_repr, Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum SpeedChange {
     /// The speed is constant.
@@ -570,7 +570,7 @@ pub struct MotorTarget {
 }
 
 /// The option for additional requests.
-#[derive(Serialize_repr, Deserialize_repr, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize_repr, Deserialize_repr, Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum WriteOpt {
     /// The new request overwrites the pending request.
@@ -613,7 +613,7 @@ pub struct MotorMultiTarget {
 }
 
 /// The direction of the cube rotation/translation.
-#[derive(Serialize_repr, Deserialize_repr, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize_repr, Deserialize_repr, Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum MotorCubeDir {
     /// Forward.
@@ -623,7 +623,7 @@ pub enum MotorCubeDir {
 }
 
 /// The priority of translation/rotation speed.
-#[derive(Serialize_repr, Deserialize_repr, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize_repr, Deserialize_repr, Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum MotorPriority {
     /// The translation speed is prioritized.
@@ -654,7 +654,7 @@ pub struct MotorAcc {
 }
 
 /// The result value of the request.
-#[derive(Serialize_repr, Deserialize_repr, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize_repr, Deserialize_repr, Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum TargetResValue {
     /// Succeeded.
@@ -764,7 +764,7 @@ msg!(
 );
 
 /// The id of preset sound.
-#[derive(Serialize_repr, Deserialize_repr, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize_repr, Deserialize_repr, Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum SoundPresetId {
     /// Enter.

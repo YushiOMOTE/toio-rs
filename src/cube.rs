@@ -17,8 +17,6 @@ use crate::{
     Searcher,
 };
 
-pub use crate::proto::{Note, SoundPresetId};
-
 /// A light operation.
 #[derive(Serialize, Deserialize, Debug, Clone, new)]
 pub struct LightOp {
@@ -52,6 +50,12 @@ pub enum Event {
     Slope(bool),
     /// Set if the button is pressed.
     Button(bool),
+    /// Posture of the cube.
+    Posture(Posture),
+    /// Position id information.
+    PosId(Option<IdPos>),
+    /// Standard id information.
+    StdId(Option<IdStd>),
     /// The protocol version.
     Version(String),
 }
@@ -347,6 +351,7 @@ impl Cube {
         Ok(())
     }
 
+    /// Subscribe to events.
     pub async fn events(&mut self) -> Result<EventStream> {
         let rx = self.dev.subscribe_msg()?;
 
@@ -391,14 +396,21 @@ async fn update(status: &Arc<Mutex<Status>>, event: Event) {
         Event::Version(b) => {
             status.version = Some(b);
         }
+        _ => {}
     }
 }
 
 fn convert(msg: Message) -> Option<Vec<Event>> {
     match msg {
-        Message::Motion(Motion::Detect(m)) => {
-            Some(vec![Event::Slope(!m.level), Event::Collision(m.collision)])
-        }
+        Message::Id(Id::Pos(pos)) => Some(vec![Event::PosId(Some(pos))]),
+        Message::Id(Id::Std(std)) => Some(vec![Event::StdId(Some(std))]),
+        Message::Id(Id::PosMissed) => Some(vec![Event::PosId(None)]),
+        Message::Id(Id::StdMissed) => Some(vec![Event::StdId(None)]),
+        Message::Motion(Motion::Detect(m)) => Some(vec![
+            Event::Slope(!m.level),
+            Event::Collision(m.collision),
+            Event::Posture(m.posture),
+        ]),
         Message::Button(Button::Func(b)) => Some(vec![Event::Button(b == ButtonState::Pressed)]),
         Message::Battery(v) => Some(vec![Event::Battery(v as usize)]),
         Message::Config(Config::VersionRes(v)) => Some(vec![Event::Version(v.version)]),
