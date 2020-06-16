@@ -45,6 +45,9 @@ pub trait SearchOps {
 /// The interface for platform-specific BLE peripheral.
 #[async_trait::async_trait]
 pub trait PeripheralOps {
+    // Peripheral id.
+    fn id(&self) -> &str;
+
     // Rssi
     fn rssi(&self) -> i32;
 
@@ -100,32 +103,30 @@ impl<T> PeripheralOps for Box<T>
 where
     T: PeripheralOps + ?Sized + Send,
 {
-    // Rssi
+    fn id(&self) -> &str {
+        (**self).id()
+    }
+
     fn rssi(&self) -> i32 {
         (**self).rssi()
     }
 
-    /// Connect to the peripheral.
     async fn connect(&mut self) -> Result<()> {
         (**self).connect().await
     }
 
-    /// Disconnect the peripheral.
     async fn disconnect(&mut self) -> Result<()> {
         (**self).disconnect().await
     }
 
-    /// Send a read request.
     async fn read(&mut self, uuid: &Uuid) -> Result<()> {
         (**self).read(uuid).await
     }
 
-    /// Write with/without response.
     async fn write(&mut self, uuid: &Uuid, value: &[u8], with_resp: bool) -> Result<()> {
         (**self).write(uuid, value, with_resp).await
     }
 
-    /// Subscribe to the peripheral.
     fn subscribe(&mut self) -> Result<ValueStream> {
         (**self).subscribe()
     }

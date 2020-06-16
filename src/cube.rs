@@ -198,7 +198,17 @@ impl Cube {
         Searcher::new()
     }
 
-    /// Get the BLE protocol version.
+    /// Gets the device id.
+    pub fn id(&self) -> &str {
+        self.dev.id()
+    }
+
+    /// Gets the signal strength.
+    pub fn rssi(&self) -> i32 {
+        self.dev.rssi()
+    }
+
+    /// Gets the BLE protocol version.
     pub async fn version(&mut self) -> Result<String> {
         fetch_if_none!(self, version, Version, {
             self.dev

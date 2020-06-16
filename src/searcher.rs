@@ -32,6 +32,7 @@ impl Searcher {
         self.do_search()
             .await?
             .into_iter()
+            .map(|c| c)
             .max_by(|a, b| a.rssi().cmp(&b.rssi()))
             .map(|a| Cube::new(a))
             .ok_or_else(|| anyhow!("No cube found"))

@@ -26,6 +26,7 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
 const WRITE_TIMEOUT: Duration = Duration::from_secs(1);
 
 pub struct Adaptor {
+    id: String,
     peripheral: Peripheral,
     rssi: i32,
     characteristics: HashMap<Uuid, Characteristic>,
@@ -35,6 +36,7 @@ pub struct Adaptor {
 impl Adaptor {
     fn new(peripheral: Peripheral, rssi: i32, manager: Arc<ConnectionManager>) -> Self {
         Self {
+            id: peripheral.id().to_string(),
             peripheral,
             rssi,
             characteristics: HashMap::new(),
@@ -59,6 +61,10 @@ impl Drop for Adaptor {
 
 #[async_trait::async_trait]
 impl PeripheralOps for Adaptor {
+    fn id(&self) -> &str {
+        &self.id
+    }
+
     fn rssi(&self) -> i32 {
         self.rssi
     }
