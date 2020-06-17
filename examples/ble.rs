@@ -12,7 +12,10 @@ async fn main() {
 
     // Search for a bluetooth device with the toio service UUID.
     let mut searcher = ble::searcher();
-    let mut peripherals = searcher.search(&UUID_SERVICE).await.unwrap();
+    let mut peripherals = searcher
+        .search(&UUID_SERVICE, Duration::from_secs(5))
+        .await
+        .unwrap();
     let mut peripheral = peripherals.pop().unwrap();
 
     // Connect to the device.

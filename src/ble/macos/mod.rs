@@ -21,7 +21,6 @@ mod connection;
 
 use self::connection::{ConnectionManager, Event};
 
-const SEARCH_TIMEOUT: Duration = Duration::from_secs(2);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 const WRITE_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -226,7 +225,7 @@ impl Searcher {
 
 #[async_trait::async_trait]
 impl SearchOps for Searcher {
-    async fn search(&mut self, uuid: &ble::Uuid) -> Result<Vec<ble::Peripheral>> {
+    async fn search(&mut self, uuid: &ble::Uuid, time: Duration) -> Result<Vec<ble::Peripheral>> {
         let uuid = Uuid::from_bytes(uuid.0);
 
         let mut rx = self.manager.subscribe();
@@ -259,7 +258,7 @@ impl SearchOps for Searcher {
             Ok::<_, Error>(())
         };
 
-        if let Ok(e) = timeout(SEARCH_TIMEOUT, discover).await {
+        if let Ok(e) = timeout(time, discover).await {
             e?
         }
 

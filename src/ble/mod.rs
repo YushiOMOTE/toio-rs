@@ -1,8 +1,11 @@
 use anyhow::{Context, Error, Result};
 use derive_new::new;
 use futures::{prelude::*, stream::BoxStream};
-use std::convert::{TryFrom, TryInto};
-use std::fmt::{self, Display};
+use std::{
+    convert::{TryFrom, TryInto},
+    fmt::{self, Display},
+    time::Duration,
+};
 
 /// Helper to construct [`ble::Uuid`][] from a string at compile time.
 #[macro_export]
@@ -39,7 +42,7 @@ pub type Searcher = Box<dyn SearchOps + Send>;
 #[async_trait::async_trait]
 pub trait SearchOps {
     /// Search for peripherals.
-    async fn search(&mut self, uuid: &Uuid) -> Result<Vec<Peripheral>>;
+    async fn search(&mut self, uuid: &Uuid, timeout: Duration) -> Result<Vec<Peripheral>>;
 }
 
 /// The interface for platform-specific BLE peripheral.

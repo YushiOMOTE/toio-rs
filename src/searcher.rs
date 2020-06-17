@@ -3,17 +3,28 @@ use crate::{
     proto, Cube,
 };
 use anyhow::{anyhow, Context, Result};
+use std::time::Duration;
 
 /// Searcher to search cubes.
 pub struct Searcher {
     searcher: ble::Searcher,
+    timeout: Duration,
 }
 
 impl Searcher {
-    /// Create a new searcher instance.
+    /// Creates a new searcher instance.
+    ///
+    /// The default search timeout is 3 seconds.
+    /// Use [`Searcher::new_with_timeout`][] to specify custom timeout.
     pub fn new() -> Self {
+        Self::new_with_timeout(Duration::from_secs(3))
+    }
+
+    /// Creates a new searcher instance with timeout.
+    pub fn new_with_timeout(timeout: Duration) -> Self {
         Self {
             searcher: ble::searcher(),
+            timeout,
         }
     }
 
@@ -27,7 +38,7 @@ impl Searcher {
             .collect())
     }
 
-    /// Find the nearest cube.
+    /// Finds the nearest cube.
     pub async fn nearest(&mut self) -> Result<Cube> {
         self.do_search()
             .await?
@@ -41,7 +52,7 @@ impl Searcher {
     async fn do_search(&mut self) -> Result<Vec<ble::Peripheral>> {
         Ok(self
             .searcher
-            .search(&proto::UUID_SERVICE)
+            .search(&proto::UUID_SERVICE, self.timeout)
             .await
             .context("Error on searching cubes")?)
     }

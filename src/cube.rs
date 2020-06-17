@@ -194,8 +194,28 @@ impl Cube {
     ///     }
     /// }
     /// ```
+    ///
+    /// By default, the search timeout is 3 seconds. Use [`Cube::search_timeout`][]
+    /// to set custom timeout.
     pub fn search() -> Searcher {
         Searcher::new()
+    }
+
+    /// Returns [`Searcher`][] instance to search for cubes with custom timeout.
+    ///
+    /// The example searches for 8 seconds and returns all cubes detected until timeout.
+    ///
+    /// ```no_run
+    /// use std::time::Duration;
+    /// use toio::Cube;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let cubes = Cube::search_timeout(Duration::from_secs(8)).all().await.unwrap();
+    /// }
+    /// ```
+    pub fn search_timeout(timeout: Duration) -> Searcher {
+        Searcher::new_with_timeout(timeout)
     }
 
     /// Gets the device id.
