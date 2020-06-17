@@ -22,8 +22,8 @@ mod connection;
 use self::connection::{ConnectionManager, Event};
 
 const SEARCH_TIMEOUT: Duration = Duration::from_secs(2);
-const CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
-const WRITE_TIMEOUT: Duration = Duration::from_secs(1);
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+const WRITE_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub struct Adaptor {
     id: String,

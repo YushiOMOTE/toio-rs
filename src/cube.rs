@@ -82,7 +82,7 @@ macro_rules! fetch_if_none {
         $($t)*
 
         if $self.status.lock().await.$field.is_none() {
-            Ok(timeout(TIMEOUT, async move {
+            Ok(timeout(READ_TIMEOUT, async move {
                 while let Some(event) = events.next().await {
                     match event {
                         Event::$msg(v) => return Ok(v),
@@ -154,7 +154,7 @@ pub struct Cube {
     handle: Option<AbortHandle>,
 }
 
-const TIMEOUT: Duration = Duration::from_secs(2);
+const READ_TIMEOUT: Duration = Duration::from_secs(5);
 
 impl Cube {
     pub(crate) fn new(dev: ble::Peripheral) -> Self {
