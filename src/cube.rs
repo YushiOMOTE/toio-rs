@@ -425,7 +425,7 @@ impl Cube {
         let ops: Result<Vec<_>> = ops
             .iter()
             .map(|op| {
-                let d = op.duration.as_millis() / 10;
+                let d = (op.duration.as_millis() / 10).max(1);
 
                 if d > 255 {
                     return Err(anyhow!("The duration must be less than 2560 milliseconds"));
@@ -514,7 +514,7 @@ impl Cube {
                 let d = op
                     .duration
                     .as_ref()
-                    .map(|d| d.as_millis() / 10)
+                    .map(|d| (d.as_millis() / 10).max(1))
                     .unwrap_or(0);
 
                 if d > 255 {
