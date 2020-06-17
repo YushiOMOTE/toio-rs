@@ -10,7 +10,15 @@ use futures::{
     prelude::*,
 };
 use log::*;
-use std::collections::HashSet;
+use std::{
+    collections::HashSet,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc::RecvTimeoutError,
+        Arc,
+    },
+    time::Duration,
+};
 use tokio::sync::{broadcast, mpsc};
 
 const CHANNEL_CAPACITY: usize = 100000;
@@ -232,6 +240,7 @@ impl Inner {
 
 pub struct ConnectionManager {
     thread: Option<std::thread::JoinHandle<Result<()>>>,
+    stop: Arc<AtomicBool>,
     client_tx: broadcast::Sender<Event>,
     manager_tx: mpsc::UnboundedSender<InnerMsg>,
     inner_handle: AbortHandle,
@@ -252,16 +261,29 @@ impl ConnectionManager {
         tokio::spawn(inner);
 
         // Run the thread to convert sync to async.
+        let stop = Arc::new(AtomicBool::new(false));
+        let stopped = stop.clone();
         let tx = manager_tx.clone();
         let thread = std::thread::spawn(move || {
-            while let Ok(event) = central_rx.recv() {
-                let _ = tx.send(InnerMsg::Event(event));
+            loop {
+                match central_rx.recv_timeout(Duration::from_millis(500)) {
+                    Ok(event) => {
+                        let _ = tx.send(InnerMsg::Event(event));
+                    }
+                    Err(RecvTimeoutError::Disconnected) | Err(RecvTimeoutError::Timeout)
+                        if stopped.load(Ordering::Relaxed) =>
+                    {
+                        break;
+                    }
+                    _ => {}
+                }
             }
             Ok(())
         });
 
         Self {
             thread: Some(thread),
+            stop,
             client_tx,
             manager_tx,
             inner_handle,
@@ -289,6 +311,9 @@ impl Drop for ConnectionManager {
     fn drop(&mut self) {
         // Abort inner thread.
         self.inner_handle.abort();
+
+        // Exit the thread to poll events.
+        self.stop.store(true, Ordering::Relaxed);
 
         if let Some(thread) = self.thread.take() {
             let _ = thread.join();
