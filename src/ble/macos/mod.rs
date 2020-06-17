@@ -231,7 +231,7 @@ impl SearchOps for Searcher {
         let mut rx = self.manager.subscribe();
         self.manager.discover(&uuid);
 
-        let mut found = Vec::new();
+        let mut found = HashMap::new();
         let discover = async {
             loop {
                 let event = rx
@@ -243,11 +243,11 @@ impl SearchOps for Searcher {
                     Event::Discovered(peripheral, ad, rssi) => {
                         if ad.service_uuids().contains(&uuid) {
                             debug!("Discovered peripheral: {:?}", peripheral);
-                            found.push(Box::new(Adaptor::new(
-                                peripheral,
-                                rssi,
-                                self.manager.clone(),
-                            )) as ble::Peripheral);
+                            found.insert(
+                                peripheral.id(),
+                                Box::new(Adaptor::new(peripheral, rssi, self.manager.clone()))
+                                    as ble::Peripheral,
+                            );
                         }
                     }
                     _ => {}
@@ -262,6 +262,6 @@ impl SearchOps for Searcher {
             e?
         }
 
-        Ok(found)
+        Ok(found.into_iter().map(|(_, p)| p).collect())
     }
 }
