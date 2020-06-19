@@ -1,6 +1,6 @@
 [package]
 name = "toio"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Yushi OMOTE <yushiomote@gmail.com>"]
 edition = "2018"
 keywords = ["toio", "driver"]
