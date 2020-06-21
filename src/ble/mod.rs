@@ -16,7 +16,7 @@ macro_rules! uuid {
 }
 
 /// Uuid for services or characteristics.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, new)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, new)]
 pub struct Uuid(pub [u8; 16]);
 
 impl Display for Uuid {

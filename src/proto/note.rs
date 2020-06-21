@@ -3,7 +3,9 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::convert::TryFrom;
 
 /// Sound note.
-#[derive(Serialize_repr, Deserialize_repr, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(
+    Serialize_repr, Deserialize_repr, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash,
+)]
 #[repr(u8)]
 pub enum Note {
     /// C 0
