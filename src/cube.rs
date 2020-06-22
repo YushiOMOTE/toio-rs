@@ -321,7 +321,7 @@ impl Cube {
                 } else {
                     MotorDir::Backward
                 },
-                (v.abs() * 255 / 100) as u8,
+                (v.abs() * (115 - 7) / 100 + 7) as u8,
             )
         };
         let (left_dir, left) = adjust(left);
