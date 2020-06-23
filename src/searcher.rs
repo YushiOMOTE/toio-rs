@@ -3,6 +3,7 @@ use crate::{
     proto, Cube,
 };
 use anyhow::{anyhow, Context, Result};
+use std::fmt::{self, Debug};
 use std::time::Duration;
 
 const SEARCH_TIMEOUT: Duration = Duration::from_secs(3);
@@ -10,6 +11,12 @@ const SEARCH_TIMEOUT: Duration = Duration::from_secs(3);
 /// Searcher to search cubes.
 pub struct Searcher {
     searcher: ble::Searcher,
+}
+
+impl Debug for Searcher {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("Searcher").finish()
+    }
 }
 
 impl Searcher {

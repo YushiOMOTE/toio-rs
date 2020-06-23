@@ -7,6 +7,7 @@ use futures::{
 };
 use log::*;
 use serde::{Deserialize, Serialize};
+use std::fmt::{self, Debug};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::{sync::Mutex, time::timeout};
@@ -181,6 +182,12 @@ pub struct Cube {
     dev: ble::Peripheral,
     status: Arc<Mutex<Status>>,
     handle: Option<AbortHandle>,
+}
+
+impl Debug for Cube {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("Cube").field("id", &self.id()).finish()
+    }
 }
 
 const READ_TIMEOUT: Duration = Duration::from_secs(5);
