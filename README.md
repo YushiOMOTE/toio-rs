@@ -9,7 +9,7 @@
 
 ![demo](https://raw.github.com/wiki/YushiOMOTE/toio-rs/demo.gif)
 
-* Supports all the messages defined in [the technical specification](https://toio.github.io/toio-spec/).
+* Supports all the messages defined in [the technical specification (ver. 2.1.0)](https://toio.github.io/toio-spec/).
 * Supports async/await.
 * Provides the similar capability as [JavaScript version](https://github.com/toio/toio.js/).
 * Provides the high-level API, which is easy to use.
