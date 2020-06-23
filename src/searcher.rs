@@ -41,6 +41,8 @@ impl Searcher {
 
     /// Searches for all cubes with custom timeout.
     ///
+    /// Cubes are sorted from nearest to farest.
+    ///
     /// ```no_run
     /// use std::time::Duration;
     /// use toio::Cube;
@@ -51,12 +53,14 @@ impl Searcher {
     /// }
     /// ```
     pub async fn all_timeout(&mut self, timeout: Duration) -> Result<Vec<Cube>> {
-        Ok(self
+        let mut cubes: Vec<_> = self
             .do_search(timeout)
             .await?
             .into_iter()
             .map(|a| Cube::new(a))
-            .collect())
+            .collect();
+        cubes.sort_by(|a, b| b.rssi().cmp(&a.rssi()));
+        Ok(cubes)
     }
 
     /// Finds the nearest cube with custom timeout.
@@ -74,7 +78,6 @@ impl Searcher {
         self.do_search(timeout)
             .await?
             .into_iter()
-            .map(|c| c)
             .max_by(|a, b| a.rssi().cmp(&b.rssi()))
             .map(|a| Cube::new(a))
             .ok_or_else(|| anyhow!("No cube found"))
