@@ -52,10 +52,10 @@ pub enum Event {
     Button(bool),
     /// Posture of the cube.
     Posture(Posture),
-    /// Position id information.
-    PosId(Option<IdPos>),
+    /// Position information.
+    Position(Option<Position>),
     /// Standard id information.
-    StdId(Option<IdStd>),
+    StdId(Option<StdId>),
     /// The protocol version.
     Version(String),
 }
@@ -66,6 +66,33 @@ pub type EventStream = BoxStream<'static, Event>;
 /// The stream of raw messages.
 pub type MessageStream = BoxStream<'static, Message>;
 
+/// The standard id information.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash, new)]
+pub struct StdId {
+    pub id: u32,
+    pub angle: u16,
+}
+
+impl From<IdStd> for StdId {
+    fn from(p: IdStd) -> Self {
+        Self::new(p.value, p.angle)
+    }
+}
+
+/// The cube position information.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash, new)]
+pub struct Position {
+    pub x: u16,
+    pub y: u16,
+    pub angle: u16,
+}
+
+impl From<IdPos> for Position {
+    fn from(p: IdPos) -> Self {
+        Self::new(p.cube_x, p.cube_y, p.cube_angle)
+    }
+}
+
 #[derive(Default, Debug)]
 struct Status {
     version: Option<String>,
@@ -73,6 +100,8 @@ struct Status {
     collision: Option<bool>,
     slope: Option<bool>,
     button: Option<bool>,
+    position: Option<Option<Position>>,
+    std_id: Option<Option<StdId>>,
 }
 
 macro_rules! fetch_if_none {
@@ -254,6 +283,26 @@ impl Cube {
     pub async fn button(&mut self) -> Result<bool> {
         fetch_if_none!(self, button, Button, {
             self.dev.read(&UUID_BUTTON).await?;
+        })
+    }
+
+    /// Gets the position information.
+    ///
+    /// Returns the position information which is read by the sensor.
+    /// Returns `None` if no position information is available.
+    pub async fn position(&mut self) -> Result<Option<Position>> {
+        fetch_if_none!(self, position, Position, {
+            self.dev.read(&UUID_ID).await?;
+        })
+    }
+
+    /// Gets the standard id.
+    ///
+    /// Returns the standard id which is read by the sensor.
+    /// Returns `None` if no id is available.
+    pub async fn std_id(&mut self) -> Result<Option<StdId>> {
+        fetch_if_none!(self, std_id, StdId, {
+            self.dev.read(&UUID_ID).await?;
         })
     }
 
@@ -803,15 +852,21 @@ async fn update(status: &Arc<Mutex<Status>>, event: Event) {
         Event::Version(b) => {
             status.version = Some(b);
         }
+        Event::Position(p) => {
+            status.position = Some(p);
+        }
+        Event::StdId(p) => {
+            status.std_id = Some(p);
+        }
         _ => {}
     }
 }
 
 fn convert(msg: Message) -> Option<Vec<Event>> {
     match msg {
-        Message::Id(Id::Pos(pos)) => Some(vec![Event::PosId(Some(pos))]),
-        Message::Id(Id::Std(std)) => Some(vec![Event::StdId(Some(std))]),
-        Message::Id(Id::PosMissed) => Some(vec![Event::PosId(None)]),
+        Message::Id(Id::Pos(pos)) => Some(vec![Event::Position(Some(pos.into()))]),
+        Message::Id(Id::Std(std)) => Some(vec![Event::StdId(Some(std.into()))]),
+        Message::Id(Id::PosMissed) => Some(vec![Event::Position(None)]),
         Message::Id(Id::StdMissed) => Some(vec![Event::StdId(None)]),
         Message::Motion(Motion::Detect(m)) => Some(vec![
             Event::Slope(!m.level),

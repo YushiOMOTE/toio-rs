@@ -53,6 +53,6 @@ mod decode;
 mod encode;
 mod searcher;
 
-pub use cube::{Cube, Event, EventStream, LightOp, SoundOp};
+pub use cube::{Cube, Event, EventStream, LightOp, Position, SoundOp, StdId};
 pub use proto::{IdPos, IdStd, Note, Posture, SoundPresetId};
 pub use searcher::*;
